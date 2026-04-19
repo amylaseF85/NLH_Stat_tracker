@@ -1,0 +1,587 @@
+/* ============================================================
+   Poker Tracker - スタイルシート
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+JP:wght@300;400;500&display=swap');
+
+/* ============================================================
+   CSS変数 - カラーパレット
+   ============================================================ */
+:root {
+  --bg:       #f4f4f6; /* ページ背景 */
+  --surface:  #ffffff; /* カード・ヘッダー背景 */
+  --surface2: #f0f0f4; /* ボタン・入力フィールド背景 */
+  --border:   #d8d8e4; /* 罫線・区切り線 */
+  --accent:   #0077cc; /* メインアクセント（ブルー） */
+  --accent2:  #d07000; /* BTN席・Openアクション（オレンジ） */
+  --danger:   #cc2020; /* 4BET〜AIアクション（レッド） */
+  --text:     #1a1a2e; /* メインテキスト */
+  --text-dim: #8888aa; /* サブテキスト・ラベル */
+  --text-mid: #555570; /* 中間テキスト */
+}
+
+/* ============================================================
+   ベース
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Sans JP', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ============================================================
+   ローディングオーバーレイ
+   init() 完了後に .hidden を付与して非表示にする
+   ============================================================ */
+.loading-overlay {
+  position: fixed; inset: 0;
+  background: rgba(244, 244, 246, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+.loading-overlay.hidden { display: none; }
+
+/* ============================================================
+   ヘッダー
+   ============================================================ */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+header h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 22px;
+  letter-spacing: 3px;
+  color: var(--accent);
+}
+.hand-counter {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+/* 同期状態インジケーター（ヘッダー右側の●）
+   JS側 setSyncDot(status) で class を切り替える
+   status: 'syncing' | 'ok' | 'error' */
+.sync-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #aaa;
+  margin-left: 5px;
+  vertical-align: middle;
+  transition: background 0.3s;
+}
+.sync-dot.syncing { background: var(--accent2); } /* 送信中：オレンジ */
+.sync-dot.ok      { background: #44bb44; }         /* 成功：グリーン */
+.sync-dot.error   { background: var(--danger); }   /* 失敗：レッド */
+
+/* ============================================================
+   タブナビゲーション
+   ============================================================ */
+.tabs {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  flex: 1;
+  padding: 10px 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ページの表示切り替え：active クラスで表示 */
+.page { display: none; }
+.page.active { display: block; }
+
+/* ============================================================
+   フラッシュメッセージ
+   JS側 showFlash(msg, isError) で .show を付与
+   ============================================================ */
+.flash {
+  position: fixed;
+  top: 64px; left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  background: var(--accent);
+  color: #fff;
+  padding: 7px 18px;
+  border-radius: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  opacity: 0;
+  transition: all 0.25s;
+  pointer-events: none;
+  z-index: 300;
+  white-space: nowrap;
+}
+.flash.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.flash.error-flash { background: var(--danger); }
+
+/* ============================================================
+   テーブルページ - 席リスト
+   ============================================================ */
+.seat-list { padding: 10px 12px; }
+
+/* 1席分の行：上段（席番号・ポジション・名前）＋下段（ボタン）の2段構造 */
+.seat-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+  min-height: 72px;
+}
+/* BTN席：オレンジ枠 + 薄いクリーム背景 */
+.seat-row.is-btn  { border-color: var(--accent2); background: #fffbf0; }
+/* SB席：薄いパープル枠 */
+.seat-row.is-sb   { border-color: #aaaacc; }
+/* BB席：さらに薄い枠 */
+.seat-row.is-bb   { border-color: #ccccdd; }
+/* 空席：半透明 */
+.seat-row.empty-seat { opacity: 0.45; }
+
+/* 上段：席番号・ポジションバッジ・プレイヤー名 */
+.seat-top {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* 席番号（左端） */
+.seat-num {
+  width: 36px;
+  min-width: 36px;
+  text-align: center;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 22px;
+  color: var(--text-dim);
+  border-right: 1px solid var(--border);
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.seat-row.is-btn .seat-num { color: var(--accent2); }
+
+/* ポジションバッジ（席番号の右隣）
+   JS側 getPosMap() で計算したポジション名を表示
+   着席人数に応じて BTN/SB/BB/UTG/UTG+1/MP/LJ/HJ/CO が割り当てられる */
+.pos-badge {
+  width: 48px;
+  min-width: 48px;
+  text-align: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 4px 2px;
+  border-radius: 3px;
+  margin: 0 8px;
+  background: var(--surface2);
+  color: var(--text-dim);
+}
+.pos-badge.btn  { background: var(--accent2); color: #fff; }
+.pos-badge.sb   { background: #c0c0d8; color: #333; }
+.pos-badge.bb   { background: #d0d0e4; color: #444; }
+.pos-badge.utg  { background: #cce8ff; color: #005599; }
+.pos-badge.utg1 { background: #d4eeff; color: #006699; }
+.pos-badge.mp   { background: #d8f0d8; color: #2a6e2a; }
+.pos-badge.lj   { background: #e4f4d0; color: #4a7020; }
+.pos-badge.hj   { background: #fff0c0; color: #806000; }
+.pos-badge.co   { background: #ffe4b0; color: #905000; }
+
+/* プレイヤー名エリア（タップでモーダルを開く） */
+.seat-info {
+  flex: 1;
+  padding: 6px 4px 6px 0;
+  min-width: 0;
+  cursor: pointer;
+}
+.seat-player-name {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seat-empty-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* 下段：アクションフラグボタン（着席時のみ表示）
+   Call / Open / 3BET / 4BET / 5BET / AI が横並び均等配置
+   タップでフラグをトグル。NEXT HAND でまとめて記録 */
+.seat-actions {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--border);
+}
+.flag-toggle {
+  flex: 1;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 10px 2px;
+  border-radius: 0;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-dim);
+  cursor: pointer;
+  letter-spacing: 0.2px;
+  transition: all 0.12s;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  text-align: center;
+}
+.flag-toggle:last-child { border-right: none; }
+
+/* アクティブ状態（フラグON）の色
+   各アクションキーと対応する CSS クラス：
+     vpip  → Call（手動のみ）
+     raise → Open（RFI）
+     3bet  → 3BET
+     4bet  → 4BET
+     5bet  → 5BET+
+     allin → AI（All-in） */
+.flag-toggle.on-vpip  { background: #e0f0ff; color: #0055aa; }
+.flag-toggle.on-raise { background: #fff3d0; color: #905000; }
+.flag-toggle.on-3bet  { background: #ffe8d0; color: #a03800; }
+.flag-toggle.on-4bet  { background: #ffd8c0; color: #902000; }
+.flag-toggle.on-5bet  { background: #ffd0d0; color: #aa0000; }
+.flag-toggle.on-allin { background: #ffc0c0; color: #880000; }
+
+/* 下部固定バー */
+.bottom-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 50;
+}
+.next-hand-btn {
+  flex: 1;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 13px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 17px;
+  letter-spacing: 3px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.next-hand-btn:active   { opacity: 0.8; }
+.next-hand-btn:disabled { opacity: 0.4; }
+.btn-move-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-mid);
+  padding: 13px 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   共通フォーム部品
+   ============================================================ */
+.field-label {
+  display: block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 6px;
+}
+select, input[type="text"] {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  font-family: 'IBM Plex Sans JP', sans-serif;
+  font-size: 14px;
+  border-radius: 4px;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  margin-bottom: 12px;
+}
+select:focus, input:focus { border-color: var(--accent); }
+
+.section-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+.empty-state {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 32px 20px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ============================================================
+   統計ページ
+   ============================================================ */
+#page-stats { padding: 12px; }
+
+.stats-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.stats-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.stats-player-name {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+.stats-hands {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* 統計グリッド：3列 × 2行 = 6指標 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.stat-item {
+  background: var(--surface2);
+  border-radius: 4px;
+  padding: 8px;
+  text-align: center;
+}
+.stat-value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--accent); /* デフォルト: ブルー（Call%） */
+  display: block;
+}
+.stat-value.orange { color: var(--accent2); } /* オレンジ（Open%・3BET%） */
+.stat-value.red    { color: var(--danger); }  /* レッド（4BET%・5BET%・AI%） */
+.stat-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 2px;
+  display: block;
+}
+
+/* ============================================================
+   履歴ページ
+   ============================================================ */
+#page-history { padding: 12px; }
+
+.history-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 9px 11px;
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.history-player { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+.history-flags  { display: flex; gap: 4px; flex-wrap: wrap; }
+
+/* フラグチップ（履歴行内のバッジ） */
+.flag-chip {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 2px;
+}
+.chip-vpip  { background: #e0f0ff; color: #0055aa; } /* Call */
+.chip-raise { background: #fff3d0; color: #905000; } /* Open */
+.chip-3bet  { background: #ffe8d0; color: #a03800; }
+.chip-4bet  { background: #ffd8c0; color: #902000; }
+.chip-5bet  { background: #ffd0d0; color: #aa0000; }
+.chip-allin { background: #ffc0c0; color: #880000; }
+.chip-pos   { background: var(--surface2); color: var(--text-mid); } /* ポジション表示 */
+
+.history-time {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  color: var(--text-dim);
+  text-align: right;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   選手管理ページ
+   ============================================================ */
+#page-players { padding: 12px; }
+
+.add-player-form { display: flex; gap: 8px; margin-bottom: 14px; }
+.add-player-form input { flex: 1; margin-bottom: 0; }
+.add-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 10px 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.add-btn:disabled { opacity: 0.4; }
+
+.player-list-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.player-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.delete-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ============================================================
+   席割り当てモーダル
+   ============================================================ */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  align-items: flex-end;
+}
+.modal-overlay.open { display: flex; }
+.modal-sheet {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px 12px 0 0;
+  max-height: 72vh;
+  overflow-y: auto;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12);
+}
+.modal-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 18px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+.modal-player-option {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 11px 14px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: border-color 0.15s;
+}
+.modal-player-option:active { border-color: var(--accent); }
+.modal-empty-option {
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  padding: 11px 14px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.modal-cancel {
+  width: 100%;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 10px;
+  border-radius: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 4px;
+}
