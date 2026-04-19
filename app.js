@@ -318,7 +318,10 @@ function renderTable() {
 			{ key: '3bet',  label: '3BET' },
 			{ key: '4bet',  label: '4BET' },
 			{ key: '5bet',  label: '5BET' },
-			{ key: 'allin', label: 'All-in'   }, // All-in
+			{ key: 'allin', label: 'All-in' }, // All-in
+			// Fold: 何もアクションしなかった場合は自動でfold判定されるが、
+			// Open後に3betされてfoldした等、アクション後のfoldはこのボタンで記録する
+			{ key: 'fold',  label: 'Fold'   },
 		].forEach(({ key, label }) => {
 			const btn = document.createElement('div');
 			btn.className = 'flag-toggle' + (flags.has(key) ? ` on-${key}` : '');
@@ -380,7 +383,11 @@ async function commitHand() {
 
 		const raiseLike = flags.has('raise') || flags.has('3bet') || flags.has('4bet') || flags.has('5bet');
 		const vpip = flags.has('vpip') || raiseLike || flags.has('allin');
-		const fold = !acted ? 1 : 0;
+		// fold判定:
+		// - 何もボタンを押さなかった場合（acted=false）は自動でfold
+		// - Foldボタンを手動で押した場合（例: Open後に3betされてfold）も fold=1
+		// - raiseLikeやallinをしている場合はfoldではない（矛盾フラグは無視）
+		const fold = (!acted || flags.has('fold')) && !raiseLike && !flags.has('allin') ? 1 : 0;
 		const squeeze = flags.has('3bet') && openFound && callAfterOpen ? 1 : 0;
 
 		newHands.push({
@@ -619,22 +626,69 @@ function renderPlayerList() {
 // ============================================================
 
 function calcStats(hands) {
-	const n = hands.length;
+	const n = hands.length; // 総記録ハンド数
 	if (!n) return null;
-	const pct = (v,d) => d ? Math.round(v / d * 100) : 0;
 
-	const vpip = hands.filter(h => h.vpip).length;
-	const pfr = hands.filter(h => h.first_raise).length;
-	const three = hands.filter(h => h.three_bet).length;
-	const sqz = hands.filter(h => h.squeeze).length;
-	const threeChance = hands.filter(h => h.three_bet_chance).length;
+	// pct(count, denom): count/denom*100 を整数で返す。denom=0 なら 0
+	const pct = (v, d) => d ? Math.round(v / d * 100) : 0;
+
+	// ── 基本カウント ──
+	const vpipCount      = hands.filter(h => h.vpip).length;
+	const pfrCount       = hands.filter(h => h.first_raise).length;
+	const threeCount     = hands.filter(h => h.three_bet).length;
+	const sqzCount       = hands.filter(h => h.squeeze).length;
+	const foldCount      = hands.filter(h => h.fold).length;
+	const allinCount     = hands.filter(h => h.allin).length;
+
+	// ── 機会ベースの分母 ──
+	// three_bet_chance: オープンがあり自分が3BETできる状況だったハンド数
+	const threeChance    = hands.filter(h => h.three_bet_chance).length;
+	// four_bet_chance: 3BETがあり自分が4BETできる状況だったハンド数
+	const fourChance     = hands.filter(h => h.four_bet_chance).length;
+
+	// ── ATS (Attempt To Steal) ──
+	// SB/BTN/CO からのオープンレイズ率
+	// 分子: SB/BTN/CO ポジションでのオープン数
+	// 分母: SB/BTN/CO ポジションでの記録ハンド数
+	const stealPos       = ['BTN', 'CO', 'SB', 'BTN/SB'];
+	const atsHands       = hands.filter(h => stealPos.includes(h.position));
+	const atsOpen        = atsHands.filter(h => h.first_raise).length;
+
+	// ── F3B (Fold to 3-Bet) ──
+	// 4BET機会（= 3BETされた状況）があったハンドのうち、何もしなかった（fold）割合
+	// 分子: 4BET機会あり かつ fold=1
+	// 分母: 4BET機会あり（= 自分がオープンして3BETされた状況）
+	// ⚠️ 現在 four_bet_chance は「3BETを受けた後の4BET機会」として記録されているため
+	//    F3Bの分母として流用している。厳密には「3BETを受けた回数」を別途記録する方が正確。
+	const f3bHands       = hands.filter(h => h.four_bet_chance);
+	const f3bFold        = f3bHands.filter(h => h.fold).length;
+
+	// ── STYLE 判定 ──
+	// VPIP と PFR の値からプレイスタイルを大まかに分類
+	// VPIP高 + PFR高 → Aggressive (LAG)
+	// VPIP高 + PFR低 → Loose Passive (LP)
+	// VPIP低 + PFR高 → Tight Aggressive (TAG)
+	// VPIP低 + PFR低 → Tight Passive / Nit
+	const vpipPct = pct(vpipCount, n);
+	const pfrPct  = pct(pfrCount, n);
+	const style =
+		vpipPct >= 30 && pfrPct >= 20 ? 'LAG'
+		: vpipPct >= 30 && pfrPct < 20 ? 'LP'
+		: vpipPct < 20 && pfrPct >= 15 ? 'TAG'
+		: vpipPct < 20                  ? 'Nit'
+		: 'Unknown';
 
 	return {
 		hands: n,
-		vpip: pct(vpip, n),
-		pfr: pct(pfr, n),
-		three: pct(three, threeChance),
-		sqz: pct(sqz, n),
+		vpip:  pct(vpipCount, n),         // VPIP%  = vpip / n
+		pfr:   pct(pfrCount, n),           // PFR%   = pfr  / n
+		three: pct(threeCount, threeChance), // 3Bet%  = three / threeChance（機会ベース）
+		sqz:   pct(sqzCount, n),           // Squeeze% = sqz / n（暫定: 分母は要検討）
+		ats:   pct(atsOpen, atsHands.length), // ATS%  = atsOpen / steal_pos_hands
+		f3b:   pct(f3bFold, f3bHands.length), // F3B%  = fold後 / 4bet機会数
+		fold:  pct(foldCount, n),          // Fold%  = fold / n
+		ai:    pct(allinCount, n),         // AI%    = allin / n
+		style,
 	};
 }
 
@@ -724,6 +778,7 @@ function renderHistory() {
 	if (h.four_bet)    flags.push('<span class="flag-chip chip-4bet">4BET</span>');
 	if (h.five_bet)    flags.push('<span class="flag-chip chip-5bet">5BET+</span>');
 	if (h.allin)       flags.push('<span class="flag-chip chip-allin">AI</span>');
+	if (h.fold)        flags.push('<span class="flag-chip chip-fold">Fold</span>');
 	if (h.position)    flags.push(`<span class="flag-chip chip-pos">${h.position}</span>`);
 
 	return `<div class="history-item">

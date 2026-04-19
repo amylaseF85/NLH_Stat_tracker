@@ -288,6 +288,7 @@ header h1 {
 .flag-toggle.on-4bet  { background: #ffd8c0; color: #902000; }
 .flag-toggle.on-5bet  { background: #ffd0d0; color: #aa0000; }
 .flag-toggle.on-allin { background: #ffc0c0; color: #880000; }
+.flag-toggle.on-fold  { background: #e8e8e8; color: #444444; }
 
 /* 下部固定バー */
 .bottom-bar {
@@ -477,6 +478,7 @@ select:focus, input:focus { border-color: var(--accent); }
 .chip-4bet  { background: #ffd8c0; color: #902000; }
 .chip-5bet  { background: #ffd0d0; color: #aa0000; }
 .chip-allin { background: #ffc0c0; color: #880000; }
+.chip-fold  { background: #e8e8e8; color: #444444; }
 .chip-pos   { background: var(--surface2); color: var(--text-mid); } /* ポジション表示 */
 
 .history-time {
