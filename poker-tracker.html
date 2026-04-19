@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Poker Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+JP:wght@300;400;500&display=swap');
+
+  :root {
+	--bg: #f4f4f6;
+	--surface: #ffffff;
+	--surface2: #f0f0f4;
+	--border: #d8d8e4;
+	--accent: #0077cc;
+	--accent2: #d07000;
+	--danger: #cc2020;
+	--text: #1a1a2e;
+	--text-dim: #8888aa;
+	--text-mid: #555570;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: 'IBM Plex Sans JP', sans-serif;
+	min-height: 100vh;
+	overflow-x: hidden;
+  }
+
+  header {
+	background: var(--surface);
+	border-bottom: 1px solid var(--border);
+	padding: 12px 16px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	position: sticky;
+	top: 0;
+	z-index: 100;
+  }
+  header h1 {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 22px;
+	letter-spacing: 3px;
+	color: var(--accent);
+  }
+  .hand-counter {
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 11px;
+	color: var(--text-dim);
+	text-align: right;
+  }
+
+  .tabs {
+	display: flex;
+	background: var(--surface);
+	border-bottom: 1px solid var(--border);
+  }
+  .tab {
+	flex: 1;
+	padding: 10px 4px;
+	text-align: center;
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	cursor: pointer;
+	border-bottom: 2px solid transparent;
+	transition: all 0.2s;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ===== SEAT LIST ===== */
+  .seat-list { padding: 10px 12px; }
+
+  .seat-row {
+	display: flex;
+	align-items: center;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	margin-bottom: 6px;
+	overflow: hidden;
+	transition: border-color 0.2s;
+	min-height: 72px;
+	flex-direction: column;
+	align-items: stretch;
+  }
+  .seat-row.is-btn  { border-color: var(--accent2); background: #fffbf0; }
+  .seat-row.is-sb   { border-color: #aaaacc; }
+  .seat-row.is-bb   { border-color: #ccccdd; }
+  .seat-row.empty-seat { opacity: 0.45; }
+
+  /* 上段：席番号＋ポジション＋プレイヤー名 */
+  .seat-top {
+	display: flex;
+	align-items: center;
+	min-height: 44px;
+  }
+
+  .seat-num {
+	width: 36px;
+	min-width: 36px;
+	text-align: center;
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 22px;
+	color: var(--text-dim);
+	border-right: 1px solid var(--border);
+	align-self: stretch;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+  }
+  .seat-row.is-btn .seat-num { color: var(--accent2); }
+
+  .pos-badge {
+	width: 48px;
+	min-width: 48px;
+	text-align: center;
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.3px;
+	padding: 4px 2px;
+	border-radius: 3px;
+	margin: 0 8px;
+	background: var(--surface2);
+	color: var(--text-dim);
+  }
+  .pos-badge.btn  { background: var(--accent2); color: #fff; }
+  .pos-badge.sb   { background: #c0c0d8; color: #333; }
+  .pos-badge.bb   { background: #d0d0e4; color: #444; }
+  .pos-badge.utg  { background: #cce8ff; color: #005599; }
+  .pos-badge.utg1 { background: #d4eeff; color: #006699; }
+  .pos-badge.mp   { background: #d8f0d8; color: #2a6e2a; }
+  .pos-badge.lj   { background: #e4f4d0; color: #4a7020; }
+  .pos-badge.hj   { background: #fff0c0; color: #806000; }
+  .pos-badge.co   { background: #ffe4b0; color: #905000; }
+
+  .seat-info {
+	flex: 1;
+	padding: 6px 4px 6px 0;
+	min-width: 0;
+	cursor: pointer;
+  }
+  .seat-player-name {
+	font-size: 14px;
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+  }
+  .seat-empty-label {
+	font-size: 12px;
+	color: var(--text-dim);
+  }
+
+  /* 下段：アクションボタン横並び */
+  .seat-actions {
+	display: flex;
+	align-items: center;
+	gap: 0;
+	border-top: 1px solid var(--border);
+  }
+  .flag-toggle {
+	flex: 1;
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 11px;
+	font-weight: 600;
+	padding: 10px 2px;
+	border-radius: 0;
+	border: none;
+	border-right: 1px solid var(--border);
+	background: var(--surface2);
+	color: var(--text-dim);
+	cursor: pointer;
+	letter-spacing: 0.2px;
+	transition: all 0.12s;
+	white-space: nowrap;
+	user-select: none;
+	-webkit-user-select: none;
+	text-align: center;
+  }
+  .flag-toggle:last-child { border-right: none; }
+  .flag-toggle.on-vpip  { border-color: #0077cc; background: #e0f0ff; color: #0055aa; }
+  .flag-toggle.on-raise { border-color: #c07000; background: #fff3d0; color: #905000; }
+  .flag-toggle.on-3bet  { border-color: #c05000; background: #ffe8d0; color: #a03800; }
+  .flag-toggle.on-4bet  { border-color: #b03000; background: #ffd8c0; color: #902000; }
+  .flag-toggle.on-5bet  { border-color: #cc2020; background: #ffd0d0; color: #aa0000; }
+  .flag-toggle.on-allin { border-color: #aa0000; background: #ffc0c0; color: #880000; }
+
+  .bottom-bar {
+	position: sticky;
+	bottom: 0;
+	background: var(--surface);
+	border-top: 1px solid var(--border);
+	padding: 10px 12px;
+	display: flex;
+	gap: 8px;
+	z-index: 50;
+  }
+  .next-hand-btn {
+	flex: 1;
+	background: var(--accent);
+	color: #fff;
+	border: none;
+	padding: 13px;
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 17px;
+	letter-spacing: 3px;
+	border-radius: 5px;
+	cursor: pointer;
+	transition: opacity 0.2s;
+  }
+  .next-hand-btn:active { opacity: 0.8; }
+  .btn-move-btn {
+	background: var(--surface2);
+	border: 1px solid var(--border);
+	color: var(--text-mid);
+	padding: 13px 14px;
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 11px;
+	font-weight: 600;
+	border-radius: 5px;
+	cursor: pointer;
+	white-space: nowrap;
+  }
+
+  .flash {
+	position: fixed;
+	top: 64px; left: 50%;
+	transform: translateX(-50%) translateY(-10px);
+	background: var(--accent);
+	color: #fff;
+	padding: 7px 18px;
+	border-radius: 4px;
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 1px;
+	opacity: 0;
+	transition: all 0.25s;
+	pointer-events: none;
+	z-index: 300;
+	white-space: nowrap;
+  }
+  .flash.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ===== STATS / HISTORY / PLAYERS ===== */
+  #page-stats, #page-players, #page-history { padding: 12px; }
+
+  .field-label {
+	display: block;
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 10px;
+	color: var(--text-dim);
+	text-transform: uppercase;
+	letter-spacing: 1.5px;
+	margin-bottom: 6px;
+  }
+  select, input[type="text"] {
+	width: 100%;
+	background: var(--surface2);
+	border: 1px solid var(--border);
+	color: var(--text);
+	padding: 10px 12px;
+	font-family: 'IBM Plex Sans JP', sans-serif;
+	font-size: 14px;
+	border-radius: 4px;
+	outline: none;
+	appearance: none;
+	-webkit-appearance: none;
+	margin-bottom: 12px;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+
+  .stats-card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 14px;
+	margin-bottom: 10px;
+  }
+  .stats-card-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	margin-bottom: 10px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--border);
+  }
+  .stats-player-name {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 20px;
+	letter-spacing: 2px;
+  }
+  .stats-hands {
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 11px;
+	color: var(--text-dim);
+  }
+  .stats-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 6px;
+  }
+  .stat-item {
+	background: var(--surface2);
+	border-radius: 4px;
+	padding: 8px;
+	text-align: center;
+  }
+  .stat-value {
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 17px;
+	font-weight: 600;
+	color: var(--accent);
+	display: block;
+  }
+  .stat-value.orange { color: var(--accent2); }
+  .stat-value.red    { color: var(--danger); }
+  .stat-label {
+	font-size: 9px;
+	color: var(--text-dim);
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	margin-top: 2px;
+	display: block;
+  }
+
+  .add-player-form { display: flex; gap: 8px; margin-bottom: 14px; }
+  .add-player-form input { flex: 1; margin-bottom: 0; }
+  .add-btn {
+	background: var(--accent);
+	color: #fff;
+	border: none;
+	padding: 10px 14px;
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 12px;
+	font-weight: 600;
+	border-radius: 4px;
+	cursor: pointer;
+	white-space: nowrap;
+  }
+  .section-title {
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 10px;
+	color: var(--text-dim);
+	text-transform: uppercase;
+	letter-spacing: 2px;
+	margin-bottom: 8px;
+  }
+  .player-list-item {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 10px 12px;
+	margin-bottom: 6px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+  }
+  .player-meta {
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 10px;
+	color: var(--text-dim);
+	margin-top: 2px;
+  }
+  .delete-btn {
+	background: none;
+	border: 1px solid var(--border);
+	color: var(--text-dim);
+	width: 28px; height: 28px;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 13px;
+	display: flex; align-items: center; justify-content: center;
+  }
+
+  .history-item {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 9px 11px;
+	margin-bottom: 5px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+  }
+  .history-player { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+  .history-flags  { display: flex; gap: 4px; flex-wrap: wrap; }
+  .flag-chip {
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 9px;
+	font-weight: 600;
+	padding: 2px 5px;
+	border-radius: 2px;
+  }
+  .chip-vpip  { background:#e0f0ff; color:#0055aa; }
+  .chip-raise { background:#fff3d0; color:#905000; }
+  .chip-3bet  { background:#ffe8d0; color:#a03800; }
+  .chip-4bet  { background:#ffd8c0; color:#902000; }
+  .chip-5bet  { background:#ffd0d0; color:#aa0000; }
+  .chip-allin { background:#ffc0c0; color:#880000; }
+  .chip-pos   { background:var(--surface2); color:var(--text-mid); }
+  .history-time {
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 9px;
+	color: var(--text-dim);
+	text-align: right;
+	margin-left: 8px;
+	white-space: nowrap;
+  }
+  .empty-state {
+	text-align: center;
+	color: var(--text-dim);
+	font-size: 12px;
+	padding: 32px 20px;
+	font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* modal */
+  .modal-overlay {
+	display: none;
+	position: fixed; inset: 0;
+	background: rgba(0,0,0,0.75);
+	z-index: 200;
+	align-items: flex-end;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-sheet {
+	background: var(--surface);
+	border-top: 1px solid var(--border);
+	width: 100%;
+	padding: 16px;
+	border-radius: 12px 12px 0 0;
+	max-height: 72vh;
+	overflow-y: auto;
+	box-shadow: 0 -4px 20px rgba(0,0,0,0.12);
+  }
+  .modal-title {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 18px;
+	letter-spacing: 2px;
+	color: var(--accent);
+	margin-bottom: 12px;
+  }
+  .modal-player-option {
+	background: var(--surface2);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 11px 14px;
+	margin-bottom: 6px;
+	cursor: pointer;
+	font-size: 14px;
+	transition: border-color 0.15s;
+  }
+  .modal-player-option:active { border-color: var(--accent); }
+  .modal-empty-option {
+	background: none;
+	border: 1px dashed var(--border);
+	border-radius: 4px;
+	padding: 11px 14px;
+	margin-bottom: 6px;
+	cursor: pointer;
+	font-size: 13px;
+	color: var(--text-dim);
+  }
+  .modal-cancel {
+	width: 100%;
+	background: none;
+	border: 1px solid var(--border);
+	color: var(--text-dim);
+	padding: 10px;
+	border-radius: 4px;
+	font-family: 'IBM Plex Mono', monospace;
+	font-size: 12px;
+	cursor: pointer;
+	margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>♠ Poker Tracker</h1>
+  <div class="hand-counter">
+	<div id="handNumLabel">HAND —</div>
+	<div id="btnSeatLabel" style="color:var(--accent2)">BTN: —</div>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('record')">テーブル</div>
+  <div class="tab" onclick="switchTab('stats')">統計</div>
+  <div class="tab" onclick="switchTab('history')">履歴</div>
+  <div class="tab" onclick="switchTab('players')">選手</div>
+</div>
+
+<div id="flash" class="flash">記録しました</div>
+
+<!-- TABLE -->
+<div class="page active" id="page-record">
+  <div class="seat-list" id="seatList"></div>
+  <div class="bottom-bar">
+	<button class="btn-move-btn" onclick="moveBtnManual()">BTN ▶</button>
+	<button class="next-hand-btn" onclick="commitHand()">NEXT HAND →</button>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="page" id="page-stats">
+  <label class="field-label">プレイヤー絞り込み</label>
+  <select id="statsPlayer" onchange="renderStats()">
+	<option value="all">全プレイヤー</option>
+  </select>
+  <div id="statsContainer"></div>
+</div>
+
+<!-- HISTORY -->
+<div class="page" id="page-history">
+  <div class="section-title">最新の記録</div>
+  <div id="historyContainer"></div>
+</div>
+
+<!-- PLAYERS -->
+<div class="page" id="page-players">
+  <div class="add-player-form">
+	<input type="text" id="newPlayerName" placeholder="プレイヤー名を入力" maxlength="20">
+	<button class="add-btn" onclick="addPlayer()">追加</button>
+  </div>
+  <div class="section-title">登録済みプレイヤー</div>
+  <div id="playerListContainer"></div>
+</div>
+
+<!-- SEAT ASSIGN MODAL -->
+<div class="modal-overlay" id="assignModal">
+  <div class="modal-sheet">
+	<div class="modal-title" id="modalTitle">席にプレイヤーを割り当て</div>
+	<div id="modalPlayerList"></div>
+	<button class="modal-cancel" onclick="closeModal()">キャンセル</button>
+  </div>
+</div>
+
+<script>
+const SEATS = 9;
+
+// 9-max position names, index 0 = BTN
+const POS_MAP = {
+  2: ['BTN/SB','BB'],
+  3: ['BTN','SB','BB'],
+  4: ['BTN','SB','BB','CO'],
+  5: ['BTN','SB','BB','HJ','CO'],
+  6: ['BTN','SB','BB','LJ','HJ','CO'],
+  7: ['BTN','SB','BB','UTG','LJ','HJ','CO'],
+  8: ['BTN','SB','BB','UTG','UTG+1','LJ','HJ','CO'],
+  9: ['BTN','SB','BB','UTG','UTG+1','LJ','LJ','HJ','CO'],
+};
+
+let state = {
+  players: [],
+  seats: Array(SEATS).fill(null),
+  btnSeat: 0,
+  handNumber: 1,
+  pendingFlags: {}, // { seatIndex: Set }
+  hands: [],
+  sessionId: null,
+};
+
+// --- storage ---
+function save() {
+  localStorage.setItem('pt3_players',   JSON.stringify(state.players));
+  localStorage.setItem('pt3_seats',     JSON.stringify(state.seats));
+  localStorage.setItem('pt3_btn',       JSON.stringify(state.btnSeat));
+  localStorage.setItem('pt3_handnum',   JSON.stringify(state.handNumber));
+  localStorage.setItem('pt3_hands',     JSON.stringify(state.hands));
+}
+function load() {
+  try {
+	state.players    = JSON.parse(localStorage.getItem('pt3_players'))  || [];
+	state.seats      = JSON.parse(localStorage.getItem('pt3_seats'))    || Array(SEATS).fill(null);
+	state.btnSeat    = JSON.parse(localStorage.getItem('pt3_btn'))      ?? 0;
+	state.handNumber = JSON.parse(localStorage.getItem('pt3_handnum'))  || 1;
+	state.hands      = JSON.parse(localStorage.getItem('pt3_hands'))    || [];
+	if (state.seats.length !== SEATS) state.seats = Array(SEATS).fill(null);
+  } catch(e) {}
+}
+
+function initSession() {
+  const d = new Date();
+  state.sessionId = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// --- tabs ---
+function switchTab(name) {
+  const names = ['record','stats','history','players'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id==='page-'+name));
+  if (name==='stats')   renderStats();
+  if (name==='history') renderHistory();
+  if (name==='players') renderPlayerList();
+}
+
+// --- position calc ---
+function getActiveSeats() {
+  return state.seats.map((p,i) => p ? i : null).filter(i => i !== null);
+}
+
+function getPosMap() {
+  const active = getActiveSeats();
+  const n = active.length;
+  if (n < 2) return {};
+  const posNames = POS_MAP[n] || POS_MAP[9];
+  const map = {};
+  // find BTN index among active seats
+  let btnIdx = active.indexOf(state.btnSeat);
+  if (btnIdx === -1) {
+	for (let off = 1; off < SEATS; off++) {
+	  const c = (state.btnSeat + off) % SEATS;
+	  btnIdx = active.indexOf(c);
+	  if (btnIdx !== -1) break;
+	}
+  }
+  for (let i = 0; i < n; i++) {
+	const seat = active[(btnIdx + i) % n];
+	map[seat] = posNames[i] || '—';
+  }
+  return map;
+}
+
+// --- render table ---
+function renderTable() {
+  const posMap = getPosMap();
+  document.getElementById('handNumLabel').textContent = `HAND ${state.handNumber}`;
+  document.getElementById('btnSeatLabel').textContent = `BTN: 席${state.btnSeat + 1}`;
+
+  const list = document.getElementById('seatList');
+  list.innerHTML = '';
+
+  for (let i = 0; i < SEATS; i++) {
+	const playerId = state.seats[i];
+	const player   = playerId ? state.players.find(p => p.id === playerId) : null;
+	const pos      = posMap[i] || '';
+	const isBtn    = pos === 'BTN' || pos === 'BTN/SB';
+	const isSb     = pos === 'SB';
+	const isBb     = pos === 'BB';
+	const flags    = state.pendingFlags[i] || new Set();
+
+	const row = document.createElement('div');
+	row.className = 'seat-row'
+	  + (isBtn ? ' is-btn' : '')
+	  + (isSb  ? ' is-sb'  : '')
+	  + (isBb  ? ' is-bb'  : '')
+	  + (!player ? ' empty-seat' : '');
+
+	// ── 上段 ──
+	const topDiv = document.createElement('div');
+	topDiv.className = 'seat-top';
+
+	// seat number
+	const numDiv = document.createElement('div');
+	numDiv.className = 'seat-num';
+	numDiv.textContent = i + 1;
+
+	// position badge
+	const posDiv = document.createElement('div');
+	const posKey = pos === 'BTN' || pos === 'BTN/SB' ? 'btn'
+	  : pos === 'SB' ? 'sb' : pos === 'BB' ? 'bb'
+	  : pos === 'UTG' ? 'utg' : pos === 'UTG+1' ? 'utg1'
+	  : pos === 'MP' ? 'mp'  : pos === 'LJ' ? 'lj'
+	  : pos === 'HJ' ? 'hj'  : pos === 'CO' ? 'co' : '';
+	posDiv.className = `pos-badge ${posKey}`;
+	posDiv.textContent = pos || '—';
+
+	// info
+	const infoDiv = document.createElement('div');
+	infoDiv.className = 'seat-info';
+	infoDiv.onclick = () => openAssignModal(i);
+	if (player) {
+	  infoDiv.innerHTML = `<div class="seat-player-name">${player.name}</div>`;
+	} else {
+	  infoDiv.innerHTML = `<div class="seat-empty-label">空席 — タップして割当</div>`;
+	}
+
+	topDiv.appendChild(numDiv);
+	topDiv.appendChild(posDiv);
+	topDiv.appendChild(infoDiv);
+	row.appendChild(topDiv);
+
+	// ── 下段：アクションボタン（着席時のみ） ──
+	if (player) {
+	  const actDiv = document.createElement('div');
+	  actDiv.className = 'seat-actions';
+	  [
+		{ key:'vpip',  label:'Call' },
+		{ key:'raise', label:'Open' },
+		{ key:'3bet',  label:'3BET' },
+		{ key:'4bet',  label:'4BET' },
+		{ key:'5bet',  label:'5BET' },
+		{ key:'allin', label:'AI'   },
+	  ].forEach(({key, label}) => {
+		const btn = document.createElement('div');
+		btn.className = 'flag-toggle' + (flags.has(key) ? ` on-${key}` : '');
+		btn.textContent = label;
+		btn.onclick = e => { e.stopPropagation(); toggleFlag(i, key); };
+		actDiv.appendChild(btn);
+	  });
+	  row.appendChild(actDiv);
+	}
+
+	list.appendChild(row);
+  }
+}
+
+// --- flag toggle ---
+function toggleFlag(seatIdx, flag) {
+  if (!state.pendingFlags[seatIdx]) state.pendingFlags[seatIdx] = new Set();
+  const flags = state.pendingFlags[seatIdx];
+  if (flags.has(flag)) {
+	flags.delete(flag);
+  } else {
+	flags.add(flag);
+  }
+  renderTable();
+}
+
+// --- commit hand ---
+function commitHand() {
+  const posMap = getPosMap();
+  let recorded = 0;
+  Object.entries(state.pendingFlags).forEach(([seatIdx, flags]) => {
+	if (!flags || flags.size === 0) return;
+	const playerId = state.seats[seatIdx];
+	if (!playerId) return;
+	state.hands.push({
+	  id: Date.now() + Math.random(),
+	  timestamp: new Date().toISOString(),
+	  session_id: state.sessionId,
+	  player_id: playerId,
+	  position: posMap[seatIdx] || '',
+	  hand_number: state.handNumber,
+	  vpip:        flags.has('vpip')  ? 1 : 0,
+	  first_raise: flags.has('raise') ? 1 : 0,
+	  three_bet:   flags.has('3bet')  ? 1 : 0,
+	  four_bet:    flags.has('4bet')  ? 1 : 0,
+	  five_bet:    flags.has('5bet')  ? 1 : 0,
+	  allin:       flags.has('allin') ? 1 : 0,
+	  memo: ''
+	});
+	recorded++;
+  });
+  state.pendingFlags = {};
+  state.handNumber++;
+  advanceBtn();
+  save();
+  if (recorded > 0) showFlash(`${recorded}件記録`);
+  renderTable();
+}
+
+// --- BTN movement ---
+function advanceBtn() {
+  const active = getActiveSeats();
+  if (active.length < 2) return;
+  for (let off = 1; off <= SEATS; off++) {
+	const next = (state.btnSeat + off) % SEATS;
+	if (state.seats[next]) { state.btnSeat = next; return; }
+  }
+}
+function moveBtnManual() {
+  advanceBtn(); save(); renderTable();
+}
+
+// --- modal ---
+let modalTargetSeat = null;
+function openAssignModal(seatIdx) {
+  modalTargetSeat = seatIdx;
+  document.getElementById('modalTitle').textContent = `席 ${seatIdx+1} にプレイヤーを割り当て`;
+  const list = document.getElementById('modalPlayerList');
+  list.innerHTML = '';
+  const emptyOpt = document.createElement('div');
+  emptyOpt.className = 'modal-empty-option';
+  emptyOpt.textContent = '空席にする';
+  emptyOpt.onclick = () => assignSeat(seatIdx, null);
+  list.appendChild(emptyOpt);
+  state.players.forEach(p => {
+	const opt = document.createElement('div');
+	opt.className = 'modal-player-option';
+	const cur = state.seats.indexOf(p.id);
+	opt.textContent = p.name + (cur >= 0 ? `  （席${cur+1}）` : '');
+	opt.onclick = () => assignSeat(seatIdx, p.id);
+	list.appendChild(opt);
+  });
+  document.getElementById('assignModal').classList.add('open');
+}
+function assignSeat(seatIdx, playerId) {
+  if (playerId) {
+	const prev = state.seats.indexOf(playerId);
+	if (prev >= 0 && prev !== seatIdx) state.seats[prev] = null;
+  }
+  state.seats[seatIdx] = playerId;
+  save(); closeModal(); renderTable();
+}
+function closeModal() {
+  document.getElementById('assignModal').classList.remove('open');
+}
+
+// --- flash ---
+function showFlash(msg = '記録しました') {
+  const f = document.getElementById('flash');
+  f.textContent = msg;
+  f.classList.add('show');
+  setTimeout(() => f.classList.remove('show'), 1600);
+}
+
+// --- players ---
+function refreshPlayerSelects() {
+  const sel = document.getElementById('statsPlayer');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="all">全プレイヤー</option>'
+	+ state.players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  sel.value = cur;
+}
+function addPlayer() {
+  const input = document.getElementById('newPlayerName');
+  const name = input.value.trim();
+  if (!name) return;
+  if (state.players.find(p => p.name === name)) { alert('同名が既に存在します'); return; }
+  state.players.push({ id: 'p_'+Date.now(), name, created_at: new Date().toISOString() });
+  save(); input.value = '';
+  refreshPlayerSelects(); renderPlayerList();
+}
+function deletePlayer(id) {
+  if (!confirm('削除しますか？')) return;
+  state.players = state.players.filter(p => p.id !== id);
+  state.seats   = state.seats.map(s => s === id ? null : s);
+  save(); refreshPlayerSelects(); renderPlayerList(); renderTable();
+}
+function renderPlayerList() {
+  const c = document.getElementById('playerListContainer');
+  if (!state.players.length) { c.innerHTML = '<div class="empty-state">プレイヤーが未登録です</div>'; return; }
+  c.innerHTML = state.players.map(p => {
+	const hands   = state.hands.filter(h => h.player_id === p.id).length;
+	const seatIdx = state.seats.indexOf(p.id);
+	const seatStr = seatIdx >= 0 ? `席${seatIdx+1}` : '未着席';
+	return `<div class="player-list-item">
+	  <div>
+		<div style="font-size:14px;font-weight:500">${p.name}</div>
+		<div class="player-meta">${seatStr} · ${hands} hands</div>
+	  </div>
+	  <button class="delete-btn" onclick="deletePlayer('${p.id}')">✕</button>
+	</div>`;
+  }).join('');
+}
+
+// --- stats ---
+function calcStats(hands) {
+  const n = hands.length;
+  if (!n) return null;
+  const pct = v => Math.round(v/n*100);
+  return {
+	hands: n,
+	vpip:  pct(hands.filter(h=>h.vpip).length),
+	pfr:   pct(hands.filter(h=>h.first_raise).length),
+	three: pct(hands.filter(h=>h.three_bet).length),
+	four:  pct(hands.filter(h=>h.four_bet).length),
+	five:  pct(hands.filter(h=>h.five_bet).length),
+	allin: pct(hands.filter(h=>h.allin).length),
+  };
+}
+function statsCard(player, hands) {
+  const s = calcStats(hands);
+  if (!s) return `<div class="stats-card">
+	<div class="stats-card-header">
+	  <span class="stats-player-name">${player.name}</span>
+	  <span class="stats-hands">0 hands</span>
+	</div>
+	<div class="empty-state" style="padding:8px">記録なし</div>
+  </div>`;
+  return `<div class="stats-card">
+	<div class="stats-card-header">
+	  <span class="stats-player-name">${player.name}</span>
+	  <span class="stats-hands">${s.hands} hands</span>
+	</div>
+	<div class="stats-grid">
+	  <div class="stat-item"><span class="stat-value">${s.vpip}%</span><span class="stat-label">Call%</span></div>
+	  <div class="stat-item"><span class="stat-value orange">${s.pfr}%</span><span class="stat-label">Open%</span></div>
+	  <div class="stat-item"><span class="stat-value orange">${s.three}%</span><span class="stat-label">3BET</span></div>
+	  <div class="stat-item"><span class="stat-value red">${s.four}%</span><span class="stat-label">4BET</span></div>
+	  <div class="stat-item"><span class="stat-value red">${s.five}%</span><span class="stat-label">5BET+</span></div>
+	  <div class="stat-item"><span class="stat-value red">${s.allin}%</span><span class="stat-label">ALL-IN</span></div>
+	</div>
+  </div>`;
+}
+function renderStats() {
+  const c = document.getElementById('statsContainer');
+  const filter = document.getElementById('statsPlayer').value;
+  const players = filter === 'all' ? state.players : state.players.filter(p => p.id === filter);
+  if (!players.length) { c.innerHTML = '<div class="empty-state">プレイヤーが未登録です</div>'; return; }
+  c.innerHTML = players.map(p => statsCard(p, state.hands.filter(h => h.player_id === p.id))).join('');
+}
+
+// --- history ---
+function renderHistory() {
+  const c = document.getElementById('historyContainer');
+  const recent = [...state.hands].reverse().slice(0, 60);
+  if (!recent.length) { c.innerHTML = '<div class="empty-state">記録がありません</div>'; return; }
+  c.innerHTML = recent.map(h => {
+	const player  = state.players.find(p => p.id === h.player_id);
+	const name    = player ? player.name : '不明';
+	const t       = new Date(h.timestamp);
+	const timeStr = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+	const flags   = [];
+	if (h.vpip)        flags.push('<span class="flag-chip chip-vpip">Call</span>');
+	if (h.first_raise) flags.push('<span class="flag-chip chip-raise">Open</span>');
+	if (h.three_bet)   flags.push('<span class="flag-chip chip-3bet">3BET</span>');
+	if (h.four_bet)    flags.push('<span class="flag-chip chip-4bet">4BET</span>');
+	if (h.five_bet)    flags.push('<span class="flag-chip chip-5bet">5BET+</span>');
+	if (h.allin)       flags.push('<span class="flag-chip chip-allin">ALL-IN</span>');
+	if (h.position)    flags.push(`<span class="flag-chip chip-pos">${h.position}</span>`);
+	return `<div class="history-item">
+	  <div style="flex:1">
+		<div class="history-player">${name} <span style="color:var(--text-dim);font-size:10px;font-family:'IBM Plex Mono',monospace">H${h.hand_number||'?'}</span></div>
+		<div class="history-flags">${flags.join('') || '<span style="color:var(--text-dim);font-size:10px">fold / no action</span>'}</div>
+	  </div>
+	  <div class="history-time">${timeStr}</div>
+	</div>`;
+  }).join('');
+}
+
+// --- init ---
+load();
+initSession();
+refreshPlayerSelects();
+renderTable();
+</script>
+</body>
+</html>
