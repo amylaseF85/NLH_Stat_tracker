@@ -161,11 +161,11 @@ header h1 {
   align-items: stretch;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  margin-bottom: 6px;
+  border-radius: 8px;
+  margin-bottom: 4px;
   overflow: hidden;
   transition: border-color 0.2s;
-  min-height: 72px;
+  min-height: 60px;
 }
 /* BTN席：オレンジ枠 + 薄いクリーム背景 */
 .seat-row.is-btn  { border-color: var(--accent2); background: #fffbf0; }
@@ -180,7 +180,7 @@ header h1 {
 .seat-top {
   display: flex;
   align-items: center;
-  min-height: 44px;
+  min-height: 36px;
 }
 
 /* 席番号（左端） */
@@ -229,7 +229,7 @@ header h1 {
 /* プレイヤー名エリア（タップでモーダルを開く） */
 .seat-info {
   flex: 1;
-  padding: 6px 4px 6px 0;
+  padding: 2px 4px 2px 0;
   min-width: 0;
   cursor: pointer;
 }
@@ -258,7 +258,7 @@ header h1 {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 11px;
   font-weight: 600;
-  padding: 10px 2px;
+  padding: 7px 2px;
   border-radius: 0;
   border: none;
   border-right: 1px solid var(--border);
@@ -296,7 +296,7 @@ header h1 {
   bottom: 0;
   background: var(--surface);
   border-top: 1px solid var(--border);
-  padding: 10px 12px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   display: flex;
   gap: 8px;
   z-index: 50;
@@ -339,6 +339,7 @@ header h1 {
   border-radius: 5px;
   cursor: pointer;
   white-space: nowrap;
+  min-height: 52px;
 }
 
 /* ============================================================
