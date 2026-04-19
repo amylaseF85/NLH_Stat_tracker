@@ -315,6 +315,18 @@ header h1 {
 }
 .next-hand-btn:active   { opacity: 0.8; }
 .next-hand-btn:disabled { opacity: 0.4; }
+.tbl-clear-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-mid);
+  padding: 13px 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
 .btn-move-btn {
   background: var(--surface2);
   border: 1px solid var(--border);
