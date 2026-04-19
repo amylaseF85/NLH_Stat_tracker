@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>Poker Tracker</title>
+  <title>NLH Hand Tracker</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
 
   <!-- ヘッダー：アプリタイトル / ハンド番号 / BTN席 / 同期ドット -->
   <header>
-    <h1>♠ Poker Tracker</h1>
+    <h1>♠ NLH Hand Tracker</h1>
     <div class="hand-counter">
       <div id="handNumLabel">HAND —<span class="sync-dot" id="syncDot"></span></div>
       <div id="btnSeatLabel">BTN: —</div>
@@ -25,7 +25,7 @@
     <div class="tab active" onclick="switchTab('record')">テーブル</div>
     <div class="tab" onclick="switchTab('stats')">統計</div>
     <div class="tab" onclick="switchTab('history')">履歴</div>
-    <div class="tab" onclick="switchTab('players')">選手</div>
+    <div class="tab" onclick="switchTab('players')">プレイヤー</div>
   </div>
 
   <!-- フラッシュメッセージ：記録完了・エラー通知 -->
@@ -39,7 +39,7 @@
     <!-- 下部固定バー -->
     <div class="bottom-bar">
       <!-- BTNを手動で1席進める -->
-      <button class="btn-move-btn" onclick="moveBtnManual()">BTN ▶</button>
+      <button class="btn-move-btn" onclick="moveBtnManual()">BTN移動</button>
 	  <button class="tbl-clear-btn" onclick="clearAllTable()">CLEAR</button>
       <!-- ハンドを確定してSheetsに送信 / BTNを自動で次の席へ -->
       <button class="next-hand-btn" id="nextHandBtn" onclick="commitHand()">NEXT HAND →</button>
