@@ -19,18 +19,20 @@ function doGet(e) {
 }
 
 // ======================================================
-// POST: データ保存
+// POST: データ保存・更新・削除
 // ======================================================
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
     const type = data.type;
 
-    if (type === 'save_player') return jsonResponse(savePlayer(data.player));
+    if (type === 'save_player')   return jsonResponse(savePlayer(data.player));
     if (type === 'delete_player') return jsonResponse(deletePlayer(data.id));
-    if (type === 'save_hand')   return jsonResponse(saveHand(data.hand));
-    if (type === 'save_state')  return jsonResponse(saveState(data.state));
-    if (type === 'get_state')   return jsonResponse(getState());
+    if (type === 'save_hand')     return jsonResponse(saveHand(data.hand));
+    if (type === 'update_hand')   return jsonResponse(updateHand(data.hand));
+    if (type === 'delete_hand')   return jsonResponse(deleteHandById(data.id));
+    if (type === 'save_state')    return jsonResponse(saveState(data.state));
+    if (type === 'get_state')     return jsonResponse(getState());
 
     return jsonResponse({ error: 'unknown type' }, 400);
   } catch(err) {
@@ -41,6 +43,8 @@ function doPost(e) {
 // ======================================================
 // Players
 // ======================================================
+
+// Sheets列: A=id, B=name, C=memo, D=created_at
 function getPlayers() {
   const sheet = getSheet('players');
   const rows = sheet.getDataRange().getValues();
@@ -48,7 +52,8 @@ function getPlayers() {
   return rows.slice(1).map(r => ({
     id:         r[0],
     name:       r[1],
-    created_at: r[2],
+    memo:       r[2] || '',
+    created_at: r[3],
   })).filter(p => p.id);
 }
 
@@ -58,8 +63,8 @@ function savePlayer(player) {
   // 既存チェック
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === player.id) {
-      sheet.getRange(i + 1, 1, 1, 3).setValues([[
-        player.id, player.name, player.created_at
+      sheet.getRange(i + 1, 1, 1, 4).setValues([[
+        player.id, player.name, player.memo || '', player.created_at
       ]]);
       return { ok: true, action: 'updated' };
     }
@@ -71,7 +76,7 @@ function savePlayer(player) {
 
 function deletePlayer(id) {
   const sheet = getSheet('players');
-  const rows = sheet.getDataRange().getValues();
+  const rows  = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === id) {
       sheet.deleteRow(i + 1);
@@ -84,18 +89,25 @@ function deletePlayer(id) {
 // ======================================================
 // Hands
 // ======================================================
+// 列順（現在のシートに合わせた順）:
+// A=id, B=timestamp, C=session_id, D=player_id, E=position,
+// F=hand_number, G=vpip, H=first_raise, I=three_bet, J=four_bet,
+// K=five_bet, L=allin, M=three_bet_chance, N=four_bet_chance,
+// O=squeeze, P=fold, Q=memo, R=limp
+// ======================================================
+
 function getHands() {
   const sheet = getSheet('hands');
-  const rows = sheet.getDataRange().getValues();
+  const rows  = sheet.getDataRange().getValues();
   if (rows.length <= 1) return [];
   return rows.slice(1).map(r => ({
-    id:          r[0],
-    timestamp:   r[1],
-    session_id:  r[2],
-    player_id:   r[3],
-    position:    r[4],
-    hand_number: r[5],
-    joined:           r[6],   // G列: vpip → joined
+    id:               r[0],
+    timestamp:        r[1],
+    session_id:       r[2],
+    player_id:        r[3],
+    position:         r[4],
+    hand_number:      r[5],
+    vpip:             r[6],   // G列
     first_raise:      r[7],   // H列
     three_bet:        r[8],   // I列
     four_bet:         r[9],   // J列
@@ -106,6 +118,7 @@ function getHands() {
     squeeze:          r[14],  // O列
     fold:             r[15],  // P列
     memo:             r[16],  // Q列
+    limp:             r[17] || 0, // R列（後から追加）
   })).filter(h => h.id);
 }
 
@@ -118,29 +131,75 @@ function saveHand(hand) {
     hand.player_id,
     hand.position,
     hand.hand_number,
-    hand.joined           ? 1 : 0,  // G列
-    hand.first_raise      ? 1 : 0,  // H列
-    hand.three_bet        ? 1 : 0,  // I列
-    hand.four_bet         ? 1 : 0,  // J列
-    hand.five_bet         ? 1 : 0,  // K列
-    hand.allin            ? 1 : 0,  // L列
-    hand.three_bet_chance ? 1 : 0,  // M列
-    hand.four_bet_chance  ? 1 : 0,  // N列
-    hand.squeeze          ? 1 : 0,  // O列
-    hand.fold             ? 1 : 0,  // P列
-    hand.memo || '',                // Q列
+    hand.vpip             ? 1 : 0,  // G
+    hand.first_raise      ? 1 : 0,  // H
+    hand.three_bet        ? 1 : 0,  // I
+    hand.four_bet         ? 1 : 0,  // J
+    hand.five_bet         ? 1 : 0,  // K
+    hand.allin            ? 1 : 0,  // L
+    hand.three_bet_chance ? 1 : 0,  // M
+    hand.four_bet_chance  ? 1 : 0,  // N
+    hand.squeeze          ? 1 : 0,  // O
+    hand.fold             ? 1 : 0,  // P
+    hand.memo || '',                 // Q
+    hand.limp             ? 1 : 0,  // R
   ]);
   return { ok: true };
 }
 
+// ハンドを行ごと上書き（修正機能用）
+function updateHand(hand) {
+  const sheet = getSheet('hands');
+  const rows  = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === hand.id) {
+      sheet.getRange(i + 1, 1, 1, 18).setValues([[
+        hand.id,
+        hand.timestamp,
+        hand.session_id,
+        hand.player_id,
+        hand.position,
+        hand.hand_number,
+        hand.vpip             ? 1 : 0,
+        hand.first_raise      ? 1 : 0,
+        hand.three_bet        ? 1 : 0,
+        hand.four_bet         ? 1 : 0,
+        hand.five_bet         ? 1 : 0,
+        hand.allin            ? 1 : 0,
+        hand.three_bet_chance ? 1 : 0,
+        hand.four_bet_chance  ? 1 : 0,
+        hand.squeeze          ? 1 : 0,
+        hand.fold             ? 1 : 0,
+        hand.memo || '',
+        hand.limp             ? 1 : 0,
+      ]]);
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: 'not found' };
+}
+
+// ハンドを削除（修正機能用）
+function deleteHandById(id) {
+  const sheet = getSheet('hands');
+  const rows  = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === id) {
+      sheet.deleteRow(i + 1);
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: 'not found' };
+}
+
 // ======================================================
-// State（席配置・BTN位置・ハンド番号を保存）
+// State（席配置・BTN・ハンド番号）
 // ======================================================
 function saveState(state) {
   const sheet = getSheet('sessions');
-  const key = 'app_state';
-  const rows = sheet.getDataRange().getValues();
-  const json = JSON.stringify(state);
+  const key   = 'app_state';
+  const rows  = sheet.getDataRange().getValues();
+  const json  = JSON.stringify(state);
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === key) {
       sheet.getRange(i + 1, 2).setValue(json);
@@ -153,7 +212,7 @@ function saveState(state) {
 
 function getState() {
   const sheet = getSheet('sessions');
-  const rows = sheet.getDataRange().getValues();
+  const rows  = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === 'app_state') {
       return { ok: true, state: JSON.parse(rows[i][1]) };
@@ -163,22 +222,22 @@ function getState() {
 }
 
 // ======================================================
-// ヘッダー初期化（初回のみ）
+// ヘッダー初期化（初回のみ実行）
 // ======================================================
 function initHeaders() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
 
   const playersSheet = ss.getSheetByName('players');
   if (playersSheet.getLastRow() === 0) {
-    playersSheet.appendRow(['id', 'name', 'created_at']);
+    playersSheet.appendRow(['id', 'name', 'memo', 'created_at']);
   }
 
   const handsSheet = ss.getSheetByName('hands');
   if (handsSheet.getLastRow() === 0) {
     handsSheet.appendRow([
-      'id','timestamp','session_id','player_id','position',
-      'hand_number','joined','first_raise','three_bet',
-      'four_bet','five_bet','allin','three_bet_chance','four_bet_chance','squeeze','fold','memo'
+      'id','timestamp','session_id','player_id','position','hand_number',
+      'vpip','first_raise','three_bet','four_bet','five_bet','allin',
+      'three_bet_chance','four_bet_chance','squeeze','fold','memo','limp'
     ]);
   }
 
@@ -192,13 +251,13 @@ function initHeaders() {
 // ユーティリティ
 // ======================================================
 function getSheet(name) {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const ss    = SpreadsheetApp.openById(SHEET_ID);
   const sheet = ss.getSheetByName(name);
   if (!sheet) throw new Error(`Sheet "${name}" not found`);
   return sheet;
 }
 
-function jsonResponse(data, status) {
+function jsonResponse(data) {
   const output = ContentService.createTextOutput(JSON.stringify(data));
   output.setMimeType(ContentService.MimeType.JSON);
   return output;

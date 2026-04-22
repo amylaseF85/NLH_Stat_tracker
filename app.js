@@ -14,14 +14,14 @@ const SEATS = 9; // テーブルの最大席数
 // キー = 着席人数、値 = ポジション名配列（index 0 が BTN）
 // BTN から時計回りに SB → BB → UTG → ... → CO の順
 const POS_MAP = {
-	2: ['BTN/SB', 'BB'],
-	3: ['BTN', 'SB', 'BB'],
-	4: ['BTN', 'SB', 'BB', 'UTG'],
-	5: ['BTN', 'SB', 'BB', 'UTG', 'CO'],
-	6: ['BTN', 'SB', 'BB', 'UTG', 'HJ', 'CO'],
-	7: ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'HJ', 'CO'],
-	8: ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'HJ', 'CO'],
-	9: ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'LJ', 'HJ', 'CO'],
+  2: ['BTN/SB', 'BB'],
+  3: ['BTN', 'SB', 'BB'],
+  4: ['BTN', 'SB', 'BB', 'UTG'],
+  5: ['BTN', 'SB', 'BB', 'UTG', 'CO'],
+  6: ['BTN', 'SB', 'BB', 'UTG', 'HJ', 'CO'],
+  7: ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'HJ', 'CO'],
+  8: ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'HJ', 'CO'],
+  9: ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'LJ', 'HJ', 'CO'],
 };
 
 // ============================================================
@@ -30,33 +30,33 @@ const POS_MAP = {
 
 let state = {
 	// プレイヤー一覧: [{ id, name, created_at }]
-	players: [],
+  players: [],
 
-	// 席割り当て: seats[0〜8] = player_id | null
+  // 席割り当て: seats[0〜8] = player_id | null
 	// インデックス 0 = 席1、インデックス 8 = 席9
-	seats: Array(SEATS).fill(null),
+  seats: Array(SEATS).fill(null),
 
-	// BTNがある席のインデックス（0〜8）
+  // BTNがある席のインデックス（0〜8）
 	// NEXT HAND ごとに advanceBtn() で自動的に次の着席者へ移動
-	btnSeat: 0,
+  btnSeat: 0,
 
-	// 現在のハンド番号（NEXT HAND ごとに +1）
-	handNumber: 1,
+  // 現在のハンド番号（NEXT HAND ごとに +1）
+  handNumber: 1,
 
-	// 現在のハンドで入力中のフラグ（未確定）
-	// { seatIndex: Set<flagKey> }
+  // 現在のハンドで入力中のフラグ（未確定）
+  // { seatIndex: Set<flagKey> }
 	// flagKey: 'vpip' | 'raise' | '3bet' | '4bet' | '5bet' | 'allin | 3b_chance | 4b_chance'
 	// NEXT HAND で commitHand() が呼ばれると hands に確定されリセット
-	pendingFlags: {},
+  pendingFlags: {},
 
 	// 記録済みハンド一覧: [{ id, timestamp, session_id, player_id,
 	//   position, hand_number, vpip, first_raise, three_bet,
 	//   four_bet, five_bet, allin, memo }]
 	// フラグは 0 or 1 の数値で保存
-	hands: [],
+  hands: [],
 
 	// セッションID: 起動日の YYYYMMDD 形式
-	sessionId: null,
+  sessionId: null,
 };
 
 // ============================================================
@@ -64,23 +64,23 @@ let state = {
 // ============================================================
 
 async function apiGet(type) {
-	const res = await fetch(`${GAS_URL}?type=${type}`);
-	return res.json();
+  const res = await fetch(`${GAS_URL}?type=${type}`);
+  return res.json();
 }
 
 async function apiPost(data) {
-	const res = await fetch(GAS_URL, {
-		method: 'POST',
-		body: JSON.stringify(data),
-	});
-	return res.json();
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return res.json();
 }
 
 // 同期ドットの状態を切り替える
 // status: 'syncing'（オレンジ）| 'ok'（グリーン）| 'error'（レッド）
 function setSyncDot(status) {
-	const dot = document.getElementById('syncDot');
-	if (dot) dot.className = 'sync-dot ' + status;
+  const dot = document.getElementById('syncDot');
+  if (dot) dot.className = 'sync-dot ' + status;
 }
 
 // ============================================================
@@ -88,58 +88,62 @@ function setSyncDot(status) {
 // ============================================================
 
 async function init() {
-	showLoading(true);
-	initSession();
-	try {
+  showLoading(true);
+  initSession();
+  try {
 	// Sheets から全データを並列取得
-		const [playersRes, handsRes, stateRes] = await Promise.all([
-			apiGet('players'),
-			apiGet('hands'),
-			apiPost({ type: 'get_state' }),
-		]);
+    const [playersRes, handsRes, stateRes] = await Promise.all([
+      apiGet('players'),
+      apiGet('hands'),
+      apiPost({ type: 'get_state' }),
+    ]);
 
-	state.players = playersRes || [];
+    state.players = (playersRes || []).map(p => ({
+      ...p,
+      memo: p.memo || '',
+    }));
 
 	// hands: Sheets から来た値は文字列になる場合があるので数値に変換
-	state.hands = (handsRes || []).map(h => ({
-		...h,
-		vpip: Number(h.vpip),
-		first_raise: Number(h.first_raise),
-		three_bet: Number(h.three_bet),
-		four_bet: Number(h.four_bet),
-		five_bet: Number(h.five_bet),
-		allin: Number(h.allin),
-		fold: Number(h.fold || 0),
-		squeeze: Number(h.squeeze || 0),
-		three_bet_chance: Number(h.three_bet_chance || 0),
-		four_bet_chance: Number(h.four_bet_chance || 0),
-		hand_number: Number(h.hand_number),
-	}));
+    state.hands = (handsRes || []).map(h => ({
+      ...h,
+      vpip:             Number(h.vpip        || 0),
+      limp:             Number(h.limp        || 0),
+      first_raise:      Number(h.first_raise || 0),
+      three_bet:        Number(h.three_bet   || 0),
+      four_bet:         Number(h.four_bet    || 0),
+      five_bet:         Number(h.five_bet    || 0),
+      allin:            Number(h.allin       || 0),
+      fold:             Number(h.fold        || 0),
+      squeeze:          Number(h.squeeze     || 0),
+      three_bet_chance: Number(h.three_bet_chance || 0),
+      four_bet_chance:  Number(h.four_bet_chance  || 0),
+      hand_number:      Number(h.hand_number || 0),
+    }));
 
 	// 席配置・BTN位置・ハンド番号を復元
-	if (stateRes && stateRes.state) {
-		const s = stateRes.state;
-		state.seats      = s.seats      || Array(SEATS).fill(null);
-		state.btnSeat    = s.btnSeat    ?? 0;
-		state.handNumber = s.handNumber || 1;
-	}
+    if (stateRes && stateRes.state) {
+      const s = stateRes.state;
+      state.seats      = s.seats      || Array(SEATS).fill(null);
+      state.btnSeat    = s.btnSeat    ?? 0;
+      state.handNumber = s.handNumber || 1;
+    }
 
-		setSyncDot('ok');
-	} catch (e) {
-		setSyncDot('error');
-		showFlash('読み込み失敗 - オフラインで続行', true);
+    setSyncDot('ok');
+  } catch (e) {
+    setSyncDot('error');
+    showFlash('読み込み失敗 - オフラインで続行', true);
 		loadLocal(); // フォールバック
-	}
+  }
 
-	refreshPlayerSelects();
-	renderTable();
-	showLoading(false);
+  refreshPlayerSelects();
+  renderTable();
+  showLoading(false);
 }
 
 // セッションIDを今日の日付で初期化
 function initSession() {
-	const d = new Date();
-	state.sessionId = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const d = new Date();
+  state.sessionId = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // ============================================================
@@ -147,40 +151,36 @@ function initSession() {
 // ============================================================
 
 function saveLocal() {
-	localStorage.setItem('pt_players',   JSON.stringify(state.players));
-	localStorage.setItem('pt_seats',     JSON.stringify(state.seats));
-	localStorage.setItem('pt_btn',       JSON.stringify(state.btnSeat));
-	localStorage.setItem('pt_handnum',   JSON.stringify(state.handNumber));
-	localStorage.setItem('pt_hands',     JSON.stringify(state.hands));
+  localStorage.setItem('pt_players',   JSON.stringify(state.players));
+  localStorage.setItem('pt_seats',     JSON.stringify(state.seats));
+  localStorage.setItem('pt_btn',       JSON.stringify(state.btnSeat));
+  localStorage.setItem('pt_handnum',   JSON.stringify(state.handNumber));
+  localStorage.setItem('pt_hands',     JSON.stringify(state.hands));
 }
 
 function loadLocal() {
-	try {
-		state.players    = JSON.parse(localStorage.getItem('pt_players'))  || [];
-		state.seats      = JSON.parse(localStorage.getItem('pt_seats'))    || Array(SEATS).fill(null);
-		state.btnSeat    = JSON.parse(localStorage.getItem('pt_btn'))      ?? 0;
-		state.handNumber = JSON.parse(localStorage.getItem('pt_handnum'))  || 1;
-		state.hands      = JSON.parse(localStorage.getItem('pt_hands'))    || [];
-		if (state.seats.length !== SEATS) state.seats = Array(SEATS).fill(null);
-	} catch (e) {}
+  try {
+    state.players    = JSON.parse(localStorage.getItem('pt_players'))  || [];
+    state.seats      = JSON.parse(localStorage.getItem('pt_seats'))    || Array(SEATS).fill(null);
+    state.btnSeat    = JSON.parse(localStorage.getItem('pt_btn'))      ?? 0;
+    state.handNumber = JSON.parse(localStorage.getItem('pt_handnum'))  || 1;
+    state.hands      = JSON.parse(localStorage.getItem('pt_hands'))    || [];
+    if (state.seats.length !== SEATS) state.seats = Array(SEATS).fill(null);
+  } catch (e) {}
 }
 
 // 席配置・BTN・ハンド番号を Sheets に保存（プレイヤー・ハンドとは別）
 async function saveTableState() {
-	setSyncDot('syncing');
-	try {
-		await apiPost({
-		type: 'save_state',
-		state: {
-			seats:      state.seats,
-			btnSeat:    state.btnSeat,
-			handNumber: state.handNumber,
-		},
-		});
-		setSyncDot('ok');
-	} catch (e) {
-		setSyncDot('error');
-	}
+  setSyncDot('syncing');
+  try {
+    await apiPost({
+      type: 'save_state',
+      state: { seats: state.seats, btnSeat: state.btnSeat, handNumber: state.handNumber },
+    });
+    setSyncDot('ok');
+  } catch (e) {
+    setSyncDot('error');
+  }
 	saveLocal(); // 常にローカルにもバックアップ
 }
 
@@ -189,16 +189,16 @@ async function saveTableState() {
 // ============================================================
 
 function switchTab(name) {
-	const names = ['record', 'stats', 'history', 'players'];
-	document.querySelectorAll('.tab').forEach((t, i) =>
-		t.classList.toggle('active', names[i] === name)
-	);
-	document.querySelectorAll('.page').forEach(p =>
-		p.classList.toggle('active', p.id === 'page-' + name)
-	);
-	if (name === 'stats')   renderStats();
-	if (name === 'history') renderHistory();
-	if (name === 'players') renderPlayerList();
+  const names = ['record', 'stats', 'history', 'players'];
+  document.querySelectorAll('.tab').forEach((t, i) =>
+    t.classList.toggle('active', names[i] === name)
+  );
+  document.querySelectorAll('.page').forEach(p =>
+    p.classList.toggle('active', p.id === 'page-' + name)
+  );
+  if (name === 'stats')   renderStats();
+  if (name === 'history') renderHistory();
+  if (name === 'players') renderPlayerList();
 }
 
 // ============================================================
@@ -214,30 +214,30 @@ function getActiveSeats() {
 // 戻り値: { seatIndex: posName, ... }
 // 例: { 0: 'BTN', 1: 'SB', 2: 'BB', 3: 'UTG', ... }
 function getPosMap() {
-	const active = getActiveSeats();
-	const n = active.length;
-	if (n < 2) return {};
+  const active = getActiveSeats();
+  const n = active.length;
+  if (n < 2) return {};
 
-	const posNames = POS_MAP[n] || POS_MAP[9];
-	const map = {};
+  const posNames = POS_MAP[n] || POS_MAP[9];
+  const map = {};
 
 	// BTN席がどの着席者インデックスにあるかを特定
 	// state.btnSeat が空席の場合は時計回りで次の着席者を探す
-	let btnIdx = active.indexOf(state.btnSeat);
-	if (btnIdx === -1) {
-		for (let off = 1; off < SEATS; off++) {
-		const c = (state.btnSeat + off) % SEATS;
-		btnIdx = active.indexOf(c);
-		if (btnIdx !== -1) break;
-		}
-	}
+  let btnIdx = active.indexOf(state.btnSeat);
+  if (btnIdx === -1) {
+    for (let off = 1; off < SEATS; off++) {
+      const c = (state.btnSeat + off) % SEATS;
+      btnIdx = active.indexOf(c);
+      if (btnIdx !== -1) break;
+    }
+  }
 
 	// BTN から時計回りにポジションを割り当て
-	for (let i = 0; i < n; i++) {
-		const seat = active[(btnIdx + i) % n];
-		map[seat] = posNames[i] || '—';
-	}
-	return map;
+  for (let i = 0; i < n; i++) {
+    const seat = active[(btnIdx + i) % n];
+    map[seat] = posNames[i] || '—';
+  }
+  return map;
 }
 
 // ============================================================
@@ -245,96 +245,95 @@ function getPosMap() {
 // ============================================================
 
 function renderTable() {
-	const posMap = getPosMap();
+  const posMap = getPosMap();
 
 	// ヘッダーのハンド番号・BTN席番号を更新
-	document.getElementById('handNumLabel').innerHTML =
-		`HAND ${state.handNumber}<span class="sync-dot" id="syncDot"></span>`;
-	document.getElementById('btnSeatLabel').textContent = `BTN: 席${state.btnSeat + 1}`;
+  document.getElementById('handNumLabel').innerHTML =
+    `HAND ${state.handNumber}<span class="sync-dot" id="syncDot"></span>`;
+  document.getElementById('btnSeatLabel').textContent = `BTN: 席${state.btnSeat + 1}`;
 
-	const list = document.getElementById('seatList');
-	list.innerHTML = '';
+  const list = document.getElementById('seatList');
+  list.innerHTML = '';
 
-	for (let i = 0; i < SEATS; i++) {
-		const playerId     = state.seats[i];
-		const player       = playerId ? state.players.find(p => p.id === playerId) : null;
-		const pos          = posMap[i] || '';
-		const isBtn        = pos === 'BTN' || pos === 'BTN/SB';
-		const isSb         = pos === 'SB';
-		const isBb         = pos === 'BB';
-		const flags        = state.pendingFlags[i] || new Set();
+  for (let i = 0; i < SEATS; i++) {
+    const playerId = state.seats[i];
+    const player   = playerId ? state.players.find(p => p.id === playerId) : null;
+    const pos      = posMap[i] || '';
+    const isBtn    = pos === 'BTN' || pos === 'BTN/SB';
+    const isSb     = pos === 'SB';
+    const isBb     = pos === 'BB';
+    const flags    = state.pendingFlags[i] || new Set();
 
 		// 席行
-		const row = document.createElement('div');
-		row.className = 'seat-row'
-		+ (isBtn   ? ' is-btn'    : '')
-		+ (isSb    ? ' is-sb'     : '')
-		+ (isBb    ? ' is-bb'     : '')
-		+ (!player ? ' empty-seat': '');
+    const row = document.createElement('div');
+    row.className = 'seat-row'
+      + (isBtn   ? ' is-btn'    : '')
+      + (isSb    ? ' is-sb'     : '')
+      + (isBb    ? ' is-bb'     : '')
+      + (!player ? ' empty-seat': '');
 
-		// ── 上段：席番号・ポジション・プレイヤー名 ──
-		const topDiv = document.createElement('div');
-		topDiv.className = 'seat-top';
+    // 上段：席番号・ポジション・プレイヤー名
+    const topDiv = document.createElement('div');
+    topDiv.className = 'seat-top';
 
-		const numDiv = document.createElement('div');
-		numDiv.className = 'seat-num';
-		numDiv.textContent = i + 1;
+    const numDiv = document.createElement('div');
+    numDiv.className = 'seat-num';
+    numDiv.textContent = i + 1;
 
 		// ポジションバッジ：CSS クラス名（pos-badge.xxx）と対応
-		const posKey = pos === 'BTN' || pos === 'BTN/SB' ? 'btn'
-		: pos === 'SB'    ? 'sb'
-		: pos === 'BB'    ? 'bb'
-		: pos === 'UTG'   ? 'utg'
-		: pos === 'UTG+1' ? 'utg1'
-		: pos === 'MP'    ? 'mp'
-		: pos === 'LJ'    ? 'lj'
-		: pos === 'HJ'    ? 'hj'
-		: pos === 'CO'    ? 'co' : '';
-		const posDiv = document.createElement('div');
-		posDiv.className = `pos-badge ${posKey}`;
-		posDiv.textContent = pos || '—';
+    const posKey = pos === 'BTN' || pos === 'BTN/SB' ? 'btn'
+      : pos === 'SB' ? 'sb' : pos === 'BB' ? 'bb'
+      : pos === 'UTG' ? 'utg' : pos === 'UTG+1' ? 'utg1'
+      : pos === 'MP'  ? 'mp'  : pos === 'LJ' ? 'lj'
+      : pos === 'HJ'  ? 'hj'  : pos === 'CO' ? 'co' : '';
+    const posDiv = document.createElement('div');
+    posDiv.className = `pos-badge ${posKey}`;
+    posDiv.textContent = pos || '—';
 
 		// プレイヤー名（タップでモーダルを開く）
-		const infoDiv = document.createElement('div');
-		infoDiv.className = 'seat-info';
-		infoDiv.onclick = () => openAssignModal(i);
-		infoDiv.innerHTML = player
-		? `<div class="seat-player-name">${player.name}</div>`
-		: `<div class="seat-empty-label">空席 — タップして割当</div>`;
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'seat-info';
+    infoDiv.onclick = () => openAssignModal(i);
+    infoDiv.innerHTML = player
+      ? `<div class="seat-player-name">${player.name}</div>`
+      : `<div class="seat-empty-label">空席 — タップして割当</div>`;
 
-		topDiv.appendChild(numDiv);
-		topDiv.appendChild(posDiv);
-		topDiv.appendChild(infoDiv);
-		row.appendChild(topDiv);
+    topDiv.appendChild(numDiv);
+    topDiv.appendChild(posDiv);
+    topDiv.appendChild(infoDiv);
+    row.appendChild(topDiv);
 
-		// ── 下段：アクションフラグボタン（着席時のみ） ──
-		if (player) {
-		const actDiv = document.createElement('div');
-		actDiv.className = 'seat-actions';
+    // 下段：アクションフラグボタン
+    if (player) {
+      const actDiv = document.createElement('div');
+      actDiv.className = 'seat-actions';
 
-		[
-			{ key: 'vpip',  label: 'Call' }, // コール（手動のみ、他アクションでは自動ON不可）
-			{ key: 'raise', label: 'Open' }, // オープンレイズ（RFI）
-			{ key: '3bet',  label: '3BET' },
-			{ key: '4bet',  label: '4BET' },
-			{ key: '5bet',  label: '5BET' },
-			{ key: 'allin', label: 'All-in' }, // All-in
-			// Fold: 何もアクションしなかった場合は自動でfold判定されるが、
-			// Open後に3betされてfoldした等、アクション後のfoldはこのボタンで記録する
-			{ key: 'fold',  label: 'Fold'   },
-		].forEach(({ key, label }) => {
-			const btn = document.createElement('div');
-			btn.className = 'flag-toggle' + (flags.has(key) ? ` on-${key}` : '');
-			btn.textContent = label;
-			btn.onclick = e => { e.stopPropagation(); toggleFlag(i, key); };
-			actDiv.appendChild(btn);
-		});
+      [
+        // ── VPIP系 ──
+        // limp: BB額だけコール（レイズなし）。VPIP=1・PFR=0 のケース
+        //       Callとの違い: Callは3BET等への対応コール、limpはプリフロップ初回のコール
+        { key: 'limp',  label: 'Limp'   },
+        { key: 'vpip',  label: 'Call'   }, // 3BET/4BETへのコール等
+        { key: 'raise', label: 'Open'   }, // オープンレイズ（RFI）
+        { key: '3bet',  label: '3BET'   },
+        { key: '4bet',  label: '4BET'   },
+        { key: '5bet',  label: '5BET'   },
+        { key: 'allin', label: 'All-in' },
+        // Fold: 何もしない場合は自動fold。アクション後のfold（Open→3betされてfold等）は手動でON
+        { key: 'fold',  label: 'Fold'   },
+      ].forEach(({ key, label }) => {
+        const btn = document.createElement('div');
+        btn.className = 'flag-toggle' + (flags.has(key) ? ` on-${key}` : '');
+        btn.textContent = label;
+        btn.onclick = e => { e.stopPropagation(); toggleFlag(i, key); };
+        actDiv.appendChild(btn);
+      });
 
-		row.appendChild(actDiv);
-		}
+      row.appendChild(actDiv);
+    }
 
-		list.appendChild(row);
-	}
+    list.appendChild(row);
+  }
 }
 
 // ============================================================
@@ -344,92 +343,140 @@ function renderTable() {
 // 指定席・指定フラグをトグル（ON ↔ OFF）
 // pendingFlags はハンド確定（commitHand）まで保持される
 function toggleFlag(seatIdx, flag) {
-	if (!state.pendingFlags[seatIdx]) state.pendingFlags[seatIdx] = new Set();
-	const flags = state.pendingFlags[seatIdx];
-	flags.has(flag) ? flags.delete(flag) : flags.add(flag);
-	renderTable();
+  if (!state.pendingFlags[seatIdx]) state.pendingFlags[seatIdx] = new Set();
+  const flags = state.pendingFlags[seatIdx];
+  flags.has(flag) ? flags.delete(flag) : flags.add(flag);
+  renderTable();
 }
 
 // ============================================================
 // ハンド確定（NEXT HAND）
 // ============================================================
+//
+// アクション順序の処理ロジック:
+//   プリフロップのアクション順は UTG → UTG+1 → ... → CO → BTN → SB → BB
+//   = POS_MAP 上の index 3 以降 → 0(BTN) → 1(SB) → 2(BB) の順
+//
+// 3BET機会の判定:
+//   「オープンが既に存在し、かつまだ3BETが出ていない状態」で
+//   自分の番が来た場合に three_bet_chance=1
+//
+// 4BET機会の判定:
+//   「3BETが既に存在する状態」で自分の番が来た場合に four_bet_chance=1
+//   ※ オープンした本人が3BETを受けた後の再アクション機会もこれに含む
+//
+// Squeeze機会の判定:
+//   「オープンがあり、かつそのハンドでCallした人が1人以上いる状態」で
+//   3BETを行った場合が Squeeze
+//
+// ============================================================
 
 async function commitHand() {
-	const posMap = getPosMap();
-	const btn = document.getElementById('nextHandBtn');
-	btn.disabled = true;
+  const posMap   = getPosMap();
+  const btn      = document.getElementById('nextHandBtn');
+  btn.disabled   = true;
 
-	const activeSeats = getActiveSeats();
-	const btnIdx = activeSeats.indexOf(state.btnSeat);
-	const orderedSeats = [];
-	for (let i = 0; i < activeSeats.length; i++) {
-		orderedSeats.push(activeSeats[(btnIdx + i) % activeSeats.length]);
-	}
+  const activeSeats = getActiveSeats();
+  const n = activeSeats.length;
+  if (n < 2) { btn.disabled = false; return; }
 
-	let openFound = false;
-	let callAfterOpen = false;
-	let threeBetFound = false;
-	const chanceMap = {};
-	const newHands = [];
+  // プリフロップのアクション順: UTG(index 3) から始まり BTN → SB → BB で終わる
+  // POS_MAP の index に基づいてソート: 3,4,5,...,n-1,0,1,2
+  const btnIdx = activeSeats.indexOf(state.btnSeat);
+  const actionOrder = [];
+  // UTG以降（BTNより後ろのポジション）→ BTN → SB → BB の順
+  for (let i = 3; i < n; i++) actionOrder.push(activeSeats[(btnIdx + i) % n]);  // UTG〜CO
+  actionOrder.push(activeSeats[(btnIdx + 0) % n]); // BTN
+  actionOrder.push(activeSeats[(btnIdx + 1) % n]); // SB
+  actionOrder.push(activeSeats[(btnIdx + 2) % n]); // BB
 
-	orderedSeats.forEach(seat => {
-		const flags = state.pendingFlags[seat] || new Set();
-		const acted = flags.size > 0;
+  // ── アクション状態の追跡 ──
+  let openFound      = false; // オープンレイズが出たか
+  let callAfterOpen  = false; // オープン後にコール（limp除く）が出たか → squeeze判定に使用
+  let threeBetFound  = false; // 3BETが出たか
 
-		chanceMap[seat] = {
-			three: openFound && !threeBetFound ? 1 : 0,
-			four: threeBetFound ? 1 : 0,
-		};
+  const chanceMap = {}; // { seat: { three, four } }
 
-		const raiseLike = flags.has('raise') || flags.has('3bet') || flags.has('4bet') || flags.has('5bet');
-		const vpip = flags.has('vpip') || raiseLike || flags.has('allin');
-		// fold判定:
-		// - 何もボタンを押さなかった場合（acted=false）は自動でfold
-		// - Foldボタンを手動で押した場合（例: Open後に3betされてfold）も fold=1
-		// - raiseLikeやallinをしている場合はfoldではない（矛盾フラグは無視）
-		const fold = (!acted || flags.has('fold')) && !raiseLike && !flags.has('allin') ? 1 : 0;
-		const squeeze = flags.has('3bet') && openFound && callAfterOpen ? 1 : 0;
+  // 1パス目: アクション順に機会フラグを計算
+  actionOrder.forEach(seat => {
+    const flags = state.pendingFlags[seat] || new Set();
 
-		newHands.push({
-			id: `h_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-			timestamp: new Date().toISOString(),
-			session_id: state.sessionId,
-			player_id: state.seats[seat],
-			position: posMap[seat] || '',
-			hand_number: state.handNumber,
-			vpip: vpip ? 1 : 0,
-			first_raise: raiseLike ? 1 : 0,
-			three_bet: flags.has('3bet') ? 1 : 0,
-			four_bet: flags.has('4bet') ? 1 : 0,
-			five_bet: flags.has('5bet') ? 1 : 0,
-			allin: flags.has('allin') ? 1 : 0,
-			fold,
-			squeeze,
-			three_bet_chance: chanceMap[seat].three,
-			four_bet_chance: chanceMap[seat].four,
-			memo: '',
-		});
+    // この席が行動する時点での機会を記録
+    chanceMap[seat] = {
+      // 3BET機会: オープンがあり、まだ3BETが出ていない
+      three: openFound && !threeBetFound ? 1 : 0,
+      // 4BET機会: 3BETが出ている（オープンした人が再アクションする場面も含む）
+      four:  threeBetFound ? 1 : 0,
+    };
 
-		if (flags.has('raise')) openFound = true;
-		if (openFound && flags.has('vpip') && !raiseLike) callAfterOpen = true;
-		if (flags.has('3bet')) threeBetFound = true;
-	});
+    const isRaise = flags.has('raise') || flags.has('3bet') || flags.has('4bet') || flags.has('5bet');
+    if (flags.has('raise'))  openFound = true;
+    // オープン後にコール（limpではなくcallとして記録されたもの）があればsqueeze判定に使う
+    if (openFound && flags.has('vpip') && !isRaise) callAfterOpen = true;
+    if (flags.has('3bet'))   threeBetFound = true;
+  });
 
-	state.hands.push(...newHands);
-	state.pendingFlags = {};
-	state.handNumber++;
-	advanceBtn();
-	renderTable();
+  // 2パス目: ハンドレコードを生成
+  const newHands = [];
 
-	try {
-		await Promise.all([
-			...newHands.map(h => apiPost({ type: 'save_hand', hand: h })),
-			saveTableState(),
-		]);
-	} catch (e) {
-		saveLocal();
-	}
-	btn.disabled = false;
+  actionOrder.forEach(seat => {
+    const playerId = state.seats[seat];
+    if (!playerId) return;
+
+    const flags   = state.pendingFlags[seat] || new Set();
+    const acted   = flags.size > 0;
+    const isRaise = flags.has('raise') || flags.has('3bet') || flags.has('4bet') || flags.has('5bet');
+
+    // VPIP: limp / call / raise系 / allin のいずれかがあればポットに参加
+    const vpip = flags.has('limp') || flags.has('vpip') || isRaise || flags.has('allin') ? 1 : 0;
+
+    // fold: 何もしなかった（acted=false）か、Foldボタンを明示的に押した場合
+    //       ただし raise系/allin をしている場合は fold にならない
+    const fold = ((!acted || flags.has('fold')) && !isRaise && !flags.has('allin')) ? 1 : 0;
+
+    // squeeze: 3BETであり、かつオープン後にCallが出ていた状況
+    const squeeze = (flags.has('3bet') && openFound && callAfterOpen) ? 1 : 0;
+
+    newHands.push({
+      id:               `h_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp:        new Date().toISOString(),
+      session_id:       state.sessionId,
+      player_id:        playerId,
+      position:         posMap[seat] || '',
+      hand_number:      state.handNumber,
+      vpip,
+      limp:             flags.has('limp')  ? 1 : 0,
+      first_raise:      isRaise            ? 1 : 0,
+      three_bet:        flags.has('3bet')  ? 1 : 0,
+      four_bet:         flags.has('4bet')  ? 1 : 0,
+      five_bet:         flags.has('5bet')  ? 1 : 0,
+      allin:            flags.has('allin') ? 1 : 0,
+      fold,
+      squeeze,
+      three_bet_chance: chanceMap[seat].three,
+      four_bet_chance:  chanceMap[seat].four,
+      memo: '',
+    });
+  });
+
+  state.hands.push(...newHands);
+  state.pendingFlags = {};
+  state.handNumber++;
+  advanceBtn();
+  renderTable();
+
+  setSyncDot('syncing');
+  try {
+    await Promise.all([
+      ...newHands.map(h => apiPost({ type: 'save_hand', hand: h })),
+      saveTableState(),
+    ]);
+    setSyncDot('ok');
+  } catch (e) {
+    setSyncDot('error');
+    saveLocal();
+  }
+  btn.disabled = false;
 }
 
 // ============================================================
@@ -438,19 +485,35 @@ async function commitHand() {
 
 // BTN を時計回りに次の着席者へ自動移動
 function advanceBtn() {
-	const active = getActiveSeats();
-	if (active.length < 2) return;
-	for (let off = 1; off <= SEATS; off++) {
-		const next = (state.btnSeat + off) % SEATS;
-		if (state.seats[next]) { state.btnSeat = next; return; }
-	}
+  const active = getActiveSeats();
+  if (active.length < 2) return;
+  for (let off = 1; off <= SEATS; off++) {
+    const next = (state.btnSeat + off) % SEATS;
+    if (state.seats[next]) { state.btnSeat = next; return; }
+  }
 }
 
 // BTN ▶ ボタン：手動で1席進める
 function moveBtnManual() {
-	advanceBtn();
-	saveTableState();
-	renderTable();
+  advanceBtn();
+  saveTableState();
+  renderTable();
+}
+
+// ============================================================
+// テーブルクリア
+// ============================================================
+
+function clearAllTable() {
+  state.seats        = Array(SEATS).fill(null);
+  state.pendingFlags = {};
+  state.btnSeat      = 0;
+  state.handNumber   = 1;
+  localStorage.removeItem('pt_seats');
+  localStorage.removeItem('pt_btn');
+  localStorage.removeItem('pt_handnum');
+  saveTableState();
+  renderTable();
 }
 
 // ============================================================
@@ -458,44 +521,44 @@ function moveBtnManual() {
 // ============================================================
 
 function openAssignModal(seatIdx) {
-	document.getElementById('modalTitle').textContent = `席 ${seatIdx + 1} にプレイヤーを割り当て`;
-	const list = document.getElementById('modalPlayerList');
-	list.innerHTML = '';
+  document.getElementById('modalTitle').textContent = `席 ${seatIdx + 1} にプレイヤーを割り当て`;
+  const list = document.getElementById('modalPlayerList');
+  list.innerHTML = '';
 
 	// 空席オプション
-	const emptyOpt = document.createElement('div');
-	emptyOpt.className = 'modal-empty-option';
-	emptyOpt.textContent = '空席にする';
-	emptyOpt.onclick = () => assignSeat(seatIdx, null);
-	list.appendChild(emptyOpt);
+  const emptyOpt = document.createElement('div');
+  emptyOpt.className = 'modal-empty-option';
+  emptyOpt.textContent = '空席にする';
+  emptyOpt.onclick = () => assignSeat(seatIdx, null);
+  list.appendChild(emptyOpt);
 
 	// プレイヤー一覧（現在の着席席番号も表示）
-	state.players.forEach(p => {
-		const opt = document.createElement('div');
-		opt.className = 'modal-player-option';
-		const cur = state.seats.indexOf(p.id);
-		opt.textContent = p.name + (cur >= 0 ? `  （席${cur + 1}）` : '');
-		opt.onclick = () => assignSeat(seatIdx, p.id);
-		list.appendChild(opt);
-	});
+  state.players.forEach(p => {
+    const opt = document.createElement('div');
+    opt.className = 'modal-player-option';
+    const cur = state.seats.indexOf(p.id);
+    opt.textContent = p.name + (cur >= 0 ? `  （席${cur + 1}）` : '');
+    opt.onclick = () => assignSeat(seatIdx, p.id);
+    list.appendChild(opt);
+  });
 
-	document.getElementById('assignModal').classList.add('open');
-	}
+  document.getElementById('assignModal').classList.add('open');
+}
 
-	function assignSeat(seatIdx, playerId) {
+function assignSeat(seatIdx, playerId) {
 	// 同じプレイヤーが他の席にいれば空席に
-	if (playerId) {
-		const prev = state.seats.indexOf(playerId);
-		if (prev >= 0 && prev !== seatIdx) state.seats[prev] = null;
-	}
-	state.seats[seatIdx] = playerId;
-	saveTableState();
-	closeModal();
-	renderTable();
+  if (playerId) {
+    const prev = state.seats.indexOf(playerId);
+    if (prev >= 0 && prev !== seatIdx) state.seats[prev] = null;
+  }
+  state.seats[seatIdx] = playerId;
+  saveTableState();
+  closeModal();
+  renderTable();
 }
 
 function closeModal() {
-	document.getElementById('assignModal').classList.remove('open');
+  document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('open'));
 }
 
 // ============================================================
@@ -503,11 +566,11 @@ function closeModal() {
 // ============================================================
 
 function showFlash(msg = '記録しました', isError = false) {
-	const f = document.getElementById('flash');
-	f.textContent = msg;
-	f.className = 'flash' + (isError ? ' error-flash' : '');
-	f.classList.add('show');
-	setTimeout(() => f.classList.remove('show'), 2000);
+  const f = document.getElementById('flash');
+  f.textContent = msg;
+  f.className = 'flash' + (isError ? ' error-flash' : '');
+  f.classList.add('show');
+  setTimeout(() => f.classList.remove('show'), 2000);
 }
 
 // ============================================================
@@ -516,152 +579,214 @@ function showFlash(msg = '記録しました', isError = false) {
 
 // 統計ページの絞り込みセレクトを再構築
 function refreshPlayerSelects() {
-	const sel = document.getElementById('statsPlayer');
-	const cur = sel.value;
-	sel.innerHTML = '<option value="all">全プレイヤー</option>'
-		+ state.players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-	sel.value = cur;
+  const sel = document.getElementById('statsPlayer');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="all">全プレイヤー</option>'
+    + state.players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  sel.value = cur;
 }
 
 async function addPlayer() {
-	const input = document.getElementById('newPlayerName');
-	const name = input.value.trim();
-	if (!name) return;
-	if (state.players.find(p => p.name === name)) { alert('同名が既に存在します'); return; }
+  const input = document.getElementById('newPlayerName');
+  const name  = input.value.trim();
+  if (!name) return;
+  if (state.players.find(p => p.name === name)) { alert('同名が既に存在します'); return; }
 
-	const addBtn = document.getElementById('addPlayerBtn');
-	addBtn.disabled = true;
+  const addBtn = document.getElementById('addPlayerBtn');
+  addBtn.disabled = true;
 
-	const player = { id: 'p_' + Date.now(), name, created_at: new Date().toISOString() };
-	state.players.push(player);
-	input.value = '';
-	refreshPlayerSelects();
-	renderPlayerList();
+  const player = { id: 'p_' + Date.now(), name, memo: '', created_at: new Date().toISOString() };
+  state.players.push(player);
+  input.value = '';
+  refreshPlayerSelects();
+  renderPlayerList();
 
-	setSyncDot('syncing');
-	try {
-		await apiPost({ type: 'save_player', player });
-		setSyncDot('ok');
-	} catch (e) {
-		setSyncDot('error');
-		saveLocal();
-	}
-	addBtn.disabled = false;
+  setSyncDot('syncing');
+  try {
+    await apiPost({ type: 'save_player', player });
+    setSyncDot('ok');
+  } catch (e) {
+    setSyncDot('error');
+    saveLocal();
+  }
+  addBtn.disabled = false;
 }
 
-	async function deletePlayer(id) {
-	if (!confirm('削除しますか？')) return;
-	state.players = state.players.filter(p => p.id !== id);
-	state.seats   = state.seats.map(s => s === id ? null : s);
-	refreshPlayerSelects();
-	renderPlayerList();
-	renderTable();
+async function deletePlayer(id) {
+  if (!confirm('削除しますか？')) return;
+  state.players = state.players.filter(p => p.id !== id);
+  state.seats   = state.seats.map(s => s === id ? null : s);
+  refreshPlayerSelects();
+  renderPlayerList();
+  renderTable();
 
-	setSyncDot('syncing');
-		try {
-			await Promise.all([
-			apiPost({ type: 'delete_player', id }),
-			saveTableState(),
-			]);
-			setSyncDot('ok');
-		} catch (e) {
-			setSyncDot('error');
-			saveLocal();
-		}
+  setSyncDot('syncing');
+  try {
+    await Promise.all([
+      apiPost({ type: 'delete_player', id }),
+      saveTableState(),
+    ]);
+    setSyncDot('ok');
+  } catch (e) {
+    setSyncDot('error');
+    saveLocal();
+  }
+}
+
+// プレイヤー名編集モーダルを開く
+function openEditPlayerModal(id) {
+  const player = state.players.find(p => p.id === id);
+  if (!player) return;
+  document.getElementById('editPlayerId').value    = id;
+  document.getElementById('editPlayerName').value  = player.name;
+  document.getElementById('editPlayerMemo').value  = player.memo || '';
+  document.getElementById('editPlayerModal').classList.add('open');
+}
+
+async function saveEditPlayer() {
+  const id   = document.getElementById('editPlayerId').value;
+  const name = document.getElementById('editPlayerName').value.trim();
+  const memo = document.getElementById('editPlayerMemo').value.trim();
+  if (!name) { alert('名前を入力してください'); return; }
+
+  const dup = state.players.find(p => p.name === name && p.id !== id);
+  if (dup) { alert('同名が既に存在します'); return; }
+
+  const player = state.players.find(p => p.id === id);
+  if (!player) return;
+  player.name = name;
+  player.memo = memo;
+
+  closeModal();
+  refreshPlayerSelects();
+  renderPlayerList();
+  renderTable();
+
+  setSyncDot('syncing');
+  try {
+    await apiPost({ type: 'save_player', player });
+    setSyncDot('ok');
+  } catch (e) {
+    setSyncDot('error');
+    saveLocal();
+  }
 }
 
 function renderPlayerList() {
-  	const c = document.getElementById('playerListContainer');
-  	if (!state.players.length) {
-		c.innerHTML = '<div class="empty-state">プレイヤーが未登録です</div>';
-		return;
-  	}
-	c.innerHTML = state.players.map(p => {
-		const hands   = state.hands.filter(h => h.player_id === p.id).length;
-		const seatIdx = state.seats.indexOf(p.id);
-		const seatStr = seatIdx >= 0 ? `席${seatIdx + 1}` : '未着席';
-		return `<div class="player-list-item">
-			<div>
-				<div style="font-size:14px;font-weight:500">${p.name}</div>
-				<div class="player-meta">${seatStr} · ${hands} hands</div>
-			</div>
-			<button class="delete-btn" onclick="deletePlayer('${p.id}')">✕</button>
-		</div>`;
-	}).join('');
+  const c = document.getElementById('playerListContainer');
+  if (!state.players.length) {
+    c.innerHTML = '<div class="empty-state">プレイヤーが未登録です</div>';
+    return;
+  }
+  c.innerHTML = state.players.map(p => {
+    const hands   = state.hands.filter(h => h.player_id === p.id).length;
+    const seatIdx = state.seats.indexOf(p.id);
+    const seatStr = seatIdx >= 0 ? `席${seatIdx + 1}` : '未着席';
+    const memoStr = p.memo ? `<div class="player-memo-preview">${p.memo}</div>` : '';
+    return `<div class="player-list-item">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:500">${p.name}</div>
+        <div class="player-meta">${seatStr} · ${hands} hands</div>
+        ${memoStr}
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="edit-btn" onclick="openEditPlayerModal('${p.id}')">✎</button>
+        <button class="delete-btn" onclick="deletePlayer('${p.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ============================================================
 // 統計計算
 // ============================================================
 //
-// 【データ構造】
-//   hands 配列の各レコード（hand）は以下のフラグを持つ（値: 0 or 1）
+// 【データ構造】各 hand レコードのフラグ（0 or 1）:
 //
-//     hand.vpip        ... Call ボタンで記録（コール）
-//     hand.first_raise ... Open ボタンで記録（オープンレイズ / RFI）
-//     hand.three_bet   ... 3BET ボタンで記録
-//     hand.four_bet    ... 4BET ボタンで記録
-//     hand.five_bet    ... 5BET ボタンで記録（5BET以上を含む）
-//     hand.allin       ... AI ボタンで記録（オールイン）
+//   hand.vpip             ... Call ボタン（3BET等へのコール）
+//   hand.limp             ... Limp ボタン（BB額のみコール）
+//   hand.first_raise      ... Open/3BET/4BET/5BET いずれかのレイズ
+//   hand.three_bet        ... 3BET ボタン
+//   hand.four_bet         ... 4BET ボタン
+//   hand.five_bet         ... 5BET ボタン
+//   hand.allin            ... All-in ボタン
+//   hand.fold             ... Fold（何もしない=自動fold、またはアクション後の手動fold）
+//   hand.squeeze          ... Squeeze（オープン後にcallがある状況での3BET）
+//   hand.three_bet_chance ... 3BET機会（オープンあり・まだ3BETなし の状況で自分の番だった）
+//   hand.four_bet_chance  ... 4BET機会（3BETあり の状況で自分の番だった）
 //
-//   ※各フラグは独立。Open を押しても Call は自動でONにならない。
-//     同じハンドに複数フラグを立てることで、例えば
-//     「Open → 3BETされたのでCall」なら Open + Call 両方ON。
+// 【統計計算式と分母の考え方】
 //
-// 【統計計算式】
-//   現在はすべて「記録した全ハンド数 n を分母」とするシンプルな集計。
-//   例: Call% = Call フラグが立っているハンド数 / n * 100
+//   VPIP%  = (limp + call + raise系) / n
+//            → 分母: 全ハンド数 n（標準的な定義）
 //
-//   ⚠️ 本来のポーカー統計では分母が「機会数」になる場合がある。
-//     例: 3BET% の本来の分母は「3BETの機会があったハンド数」
-//        （= 誰かがオープンした状況で自分が行動したハンド数）
-//        現在は n を使った近似値で計算している。
+//   PFR%   = first_raise / n
+//            → 分母: 全ハンド数 n
 //
-// 【調整したい場合】
-//   calcStats() 内の各 pct() の引数か分母 n を変更する。
-//   例: 3BET% を「オープンされた回数」を分母にしたい場合は
-//     three_bet_opp などの新しいフラグをデータに追加し、
-//     pct(three, openCount) のように変更する。
+//   Limp%  = limp / n
+//            → 分母: 全ハンド数 n
+//
+//   3BET%  = three_bet / three_bet_chance
+//            → 分母: 3BET機会数（オープンを見た状況の回数）
+//            ⚠️ n を分母にすると「3BET機会がないのに低く出る」ため機会ベースが正確
+//
+//   Squeeze% = squeeze / three_bet_chance
+//            → 分母: 3BET機会数（squeezeも3BET機会がある状況でのみ発生）
+//
+//   F3B%   = fold後 / four_bet_chance
+//            → 分母: 4BET機会数（= 自分が3BETされた回数）
+//            ⚠️ four_bet_chance は「オープンして3BETを受けた場面」を意味する
+//               そのうち fold した割合が Fold to 3Bet
+//
+//   ATS%   = BTN/CO/SBでのオープン / BTN/CO/SBでの記録ハンド数
+//            → steal可能ポジションでのオープン率
+//
+//   Fold%  = fold / n
+//   AI%    = allin / n
+//
+// 【統計項目を追加する手順】
+//   ① renderTable() のボタン定義配列にキーを追加
+//   ② commitHand() のハンドレコードにフィールドを追加
+//   ③ calcStats() にカウント変数・戻り値を追加
+//   ④ statsCard() の HTML に stat-item を追加
+//   ⑤ GAS の saveHand()/getHands() と Sheets に列を追加
 //
 // ============================================================
 
 function calcStats(hands) {
-	const n = hands.length; // 総記録ハンド数
-	if (!n) return null;
+  const n = hands.length;
+  if (!n) return null;
 
-	// pct(count, denom): count/denom*100 を整数で返す。denom=0 なら 0
-	const pct = (v, d) => d ? Math.round(v / d * 100) : 0;
+  const pct = (v, d) => d ? Math.round(v / d * 100) : 0;
 
-	// ── 基本カウント ──
-	const vpipCount      = hands.filter(h => h.vpip).length;
-	const pfrCount       = hands.filter(h => h.first_raise).length;
-	const threeCount     = hands.filter(h => h.three_bet).length;
-	const sqzCount       = hands.filter(h => h.squeeze).length;
-	const foldCount      = hands.filter(h => h.fold).length;
-	const allinCount     = hands.filter(h => h.allin).length;
+  // ── 基本カウント ──
+  const limpCount      = hands.filter(h => h.limp).length;
+  const vpipCount      = hands.filter(h => h.vpip || h.limp || h.first_raise || h.allin).length; // VPIP = 参加したすべて
+  const pfrCount       = hands.filter(h => h.first_raise).length;
+  const threeCount     = hands.filter(h => h.three_bet).length;
+  const sqzCount       = hands.filter(h => h.squeeze).length;
+  const foldCount      = hands.filter(h => h.fold).length;
+  const allinCount     = hands.filter(h => h.allin).length;
 
-	// ── 機会ベースの分母 ──
+  // ── 機会ベースの分母 ──
 	// three_bet_chance: オープンがあり自分が3BETできる状況だったハンド数
-	const threeChance    = hands.filter(h => h.three_bet_chance).length;
+  const threeChance    = hands.filter(h => h.three_bet_chance).length;
 	// four_bet_chance: 3BETがあり自分が4BETできる状況だったハンド数
-	const fourChance     = hands.filter(h => h.four_bet_chance).length;
+  const fourChance     = hands.filter(h => h.four_bet_chance).length;
 
-	// ── ATS (Attempt To Steal) ──
+  // ── ATS (Attempt To Steal) ──
 	// SB/BTN/CO からのオープンレイズ率
 	// 分子: SB/BTN/CO ポジションでのオープン数
 	// 分母: SB/BTN/CO ポジションでの記録ハンド数
-	const stealPos       = ['BTN', 'CO', 'SB', 'BTN/SB'];
-	const atsHands       = hands.filter(h => stealPos.includes(h.position));
-	const atsOpen        = atsHands.filter(h => h.first_raise).length;
+  const stealPos       = ['BTN', 'CO', 'SB', 'BTN/SB'];
+  const atsHands       = hands.filter(h => stealPos.includes(h.position));
+  const atsOpen        = atsHands.filter(h => h.first_raise).length;
 
-	// ── F3B (Fold to 3-Bet) ──
-	// 4BET機会（= 3BETされた状況）があったハンドのうち、何もしなかった（fold）割合
-	// 分子: 4BET機会あり かつ fold=1
-	// 分母: 4BET機会あり（= 自分がオープンして3BETされた状況）
-	// ⚠️ 現在 four_bet_chance は「3BETを受けた後の4BET機会」として記録されているため
-	//    F3Bの分母として流用している。厳密には「3BETを受けた回数」を別途記録する方が正確。
-	const f3bHands       = hands.filter(h => h.four_bet_chance);
-	const f3bFold        = f3bHands.filter(h => h.fold).length;
+  // ── F3B (Fold to 3-Bet) ──
+  // 分母: four_bet_chance（3BETを受けた場面 = 4BET機会）
+  // 分子: その中でfoldしたもの
+  const f3bHands       = hands.filter(h => h.four_bet_chance);
+  const f3bFold        = f3bHands.filter(h => h.fold).length;
 
 	// ── STYLE 判定 ──
 	// VPIP と PFR の値からプレイスタイルを大まかに分類
@@ -669,89 +794,76 @@ function calcStats(hands) {
 	// VPIP高 + PFR低 → Loose Passive (LP)
 	// VPIP低 + PFR高 → Tight Aggressive (TAG)
 	// VPIP低 + PFR低 → Tight Passive / Nit
-	const vpipPct = pct(vpipCount, n);
-	const pfrPct  = pct(pfrCount, n);
-	const style =
-		vpipPct >= 30 && pfrPct >= 20 ? 'LAG'
-		: vpipPct >= 30 && pfrPct < 20 ? 'LP'
-		: vpipPct < 20 && pfrPct >= 15 ? 'TAG'
-		: vpipPct < 20                  ? 'Nit'
-		: 'Unknown';
+  const vpipPct = pct(vpipCount, n);
+  const pfrPct  = pct(pfrCount, n);
+  const style =
+    vpipPct >= 30 && pfrPct >= 20 ? 'LAG'
+    : vpipPct >= 30 && pfrPct < 20 ? 'LP'
+    : vpipPct < 20 && pfrPct >= 15 ? 'TAG'
+    : vpipPct < 20                  ? 'Nit'
+    : 'Unknown';
 
-	return {
-		hands: n,
-		vpip:  pct(vpipCount, n),         // VPIP%  = vpip / n
-		pfr:   pct(pfrCount, n),           // PFR%   = pfr  / n
-		three: pct(threeCount, threeChance), // 3Bet%  = three / threeChance（機会ベース）
-		sqz:   pct(sqzCount, n),           // Squeeze% = sqz / n（暫定: 分母は要検討）
-		ats:   pct(atsOpen, atsHands.length), // ATS%  = atsOpen / steal_pos_hands
-		f3b:   pct(f3bFold, f3bHands.length), // F3B%  = fold後 / 4bet機会数
-		fold:  pct(foldCount, n),          // Fold%  = fold / n
-		ai:    pct(allinCount, n),         // AI%    = allin / n
-		style,
-	};
+  return {
+    hands: n,
+    vpip:  pct(vpipCount, n),
+    pfr:   pct(pfrCount, n),
+    limp:  pct(limpCount, n),
+    three: pct(threeCount, threeChance), // 機会ベース
+    sqz:   pct(sqzCount, threeChance),   // 機会ベース（3BET機会のうちsqueeze）
+    ats:   pct(atsOpen, atsHands.length),
+    f3b:   pct(f3bFold, f3bHands.length), // 機会ベース
+    fold:  pct(foldCount, n),
+    ai:    pct(allinCount, n),
+    style,
+  };
 }
 
 // 統計カードのHTMLを生成
 function statsCard(player, hands) {
-  	const s = calcStats(hands);
- 	 if (!s) {
-		return `<div class="stats-card">
-	  		<div class="stats-card-header">
-			<span class="stats-player-name">${player.name}</span>
-			<span class="stats-hands">0 hands</span>
-	  	</div>
-	  		<div class="empty-state" style="padding:8px">記録なし</div>
-		</div>`;
+  const s = calcStats(hands);
+  if (!s) {
+    return `<div class="stats-card">
+      <div class="stats-card-header">
+        <span class="stats-player-name">${player.name}</span>
+        <span class="stats-hands">0 hands</span>
+      </div>
+      <div class="empty-state" style="padding:8px">記録なし</div>
+    </div>`;
   }
-  	return `<div class="stats-card">
-		<div class="stats-card-header">
-			<span class="stats-player-name">${player.name}</span>
-			<span class="stats-hands">${s.hands} hands</span>
-		</div>
-		<div class="stats-grid">
-			<div class="stat-item"><span class="stat-value">${s.vpip}</span>
-			<span class="stat-label">VPIP</span>
-		</div>
-			<div class="stat-item"><span class="stat-value orange">${s.pfr}</span>
-			<span class="stat-label">PFR</span>
-		</div>
-			<div class="stat-item"><span class="stat-value orange">${s.three}</span>
-			<span class="stat-label">3bet%</span>
-		</div>
-			<div class="stat-item"><span class="stat-value red">${s.sqz}</span>
-			<span class="stat-label">Squeeze%</span>
-		</div>
-			<div class="stat-item"><span class="stat-value">${s.ats}</span>
-			<span class="stat-label">ATS</span>
-		</div>
-			<div class="stat-item"><span class="stat-value">${s.f3b}</span>
-			<span class="stat-label">F3B</span>
-		</div>
-			<div class="stat-item"><span class="stat-value">${s.fold}</span>
-			<span class="stat-label">FOLD</span>
-		</div>
-			<div class="stat-item"><span class="stat-value">${s.ai}</span>
-			<span class="stat-label">AI</span>
-		</div>
-		</div>
-		<div style="margin-top:8px;font-size:12px;opacity:.8">STYLE: ${s.style}</div>
-  	</div>`;
+  return `<div class="stats-card">
+    <div class="stats-card-header">
+      <span class="stats-player-name">${player.name}</span>
+      <span class="stats-hands">${s.hands} hands</span>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-item"><span class="stat-value">${s.vpip}</span><span class="stat-label">VPIP</span></div>
+      <div class="stat-item"><span class="stat-value orange">${s.pfr}</span><span class="stat-label">PFR</span></div>
+      <div class="stat-item"><span class="stat-value">${s.limp}</span><span class="stat-label">Limp%</span></div>
+      <div class="stat-item"><span class="stat-value orange">${s.three}</span><span class="stat-label">3bet%</span></div>
+      <div class="stat-item"><span class="stat-value red">${s.sqz}</span><span class="stat-label">Squeeze%</span></div>
+      <div class="stat-item"><span class="stat-value orange">${s.ats}</span><span class="stat-label">ATS</span></div>
+      <div class="stat-item"><span class="stat-value red">${s.f3b}</span><span class="stat-label">F3B</span></div>
+      <div class="stat-item"><span class="stat-value">${s.fold}</span><span class="stat-label">Fold%</span></div>
+      <div class="stat-item"><span class="stat-value red">${s.ai}</span><span class="stat-label">AI%</span></div>
+    </div>
+    <div style="margin-top:8px;font-size:12px;opacity:.7;font-family:'IBM Plex Mono',monospace">STYLE: ${s.style}</div>
+    ${player.memo ? `<div class="stats-memo">${player.memo}</div>` : ''}
+  </div>`;
 }
 
 function renderStats() {
-	const c = document.getElementById('statsContainer');
-	const filter = document.getElementById('statsPlayer').value;
-	const players = filter === 'all'
-		? state.players
-		: state.players.filter(p => p.id === filter);
- 	if (!players.length) {
-		c.innerHTML = '<div class="empty-state">プレイヤーが未登録です</div>';
-		return;
-  	}
-  	c.innerHTML = players
-		.map(p => statsCard(p, state.hands.filter(h => h.player_id === p.id)))
-		.join('');
+  const c = document.getElementById('statsContainer');
+  const filter = document.getElementById('statsPlayer').value;
+  const players = filter === 'all'
+    ? state.players
+    : state.players.filter(p => p.id === filter);
+  if (!players.length) {
+    c.innerHTML = '<div class="empty-state">プレイヤーが未登録です</div>';
+    return;
+  }
+  c.innerHTML = players
+    .map(p => statsCard(p, state.hands.filter(h => h.player_id === p.id)))
+    .join('');
 }
 
 // ============================================================
@@ -760,42 +872,127 @@ function renderStats() {
 
 function renderHistory() {
   const c = document.getElementById('historyContainer');
-  const recent = [...state.hands].reverse().slice(0, 60); // 最新60件
+  const recent = [...state.hands].reverse().slice(0, 60);
   if (!recent.length) {
-	c.innerHTML = '<div class="empty-state">記録がありません</div>';
-	return;
+    c.innerHTML = '<div class="empty-state">記録がありません</div>';
+    return;
   }
   c.innerHTML = recent.map(h => {
-	const player  = state.players.find(p => p.id === h.player_id);
-	const name    = player ? player.name : '不明';
-	const t       = new Date(h.timestamp);
-	const timeStr = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+    const player  = state.players.find(p => p.id === h.player_id);
+    const name    = player ? player.name : '不明';
+    const t       = new Date(h.timestamp);
+    const timeStr = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
 
-	const flags = [];
-	if (h.vpip)        flags.push('<span class="flag-chip chip-vpip">Call</span>');
-	if (h.first_raise) flags.push('<span class="flag-chip chip-raise">Open</span>');
-	if (h.three_bet)   flags.push('<span class="flag-chip chip-3bet">3BET</span>');
-	if (h.four_bet)    flags.push('<span class="flag-chip chip-4bet">4BET</span>');
-	if (h.five_bet)    flags.push('<span class="flag-chip chip-5bet">5BET+</span>');
-	if (h.allin)       flags.push('<span class="flag-chip chip-allin">AI</span>');
-	if (h.fold)        flags.push('<span class="flag-chip chip-fold">Fold</span>');
-	if (h.position)    flags.push(`<span class="flag-chip chip-pos">${h.position}</span>`);
+    const flags = [];
+    if (h.limp)        flags.push('<span class="flag-chip chip-limp">Limp</span>');
+    if (h.vpip)        flags.push('<span class="flag-chip chip-vpip">Call</span>');
+    if (h.first_raise) flags.push('<span class="flag-chip chip-raise">Open</span>');
+    if (h.three_bet)   flags.push('<span class="flag-chip chip-3bet">3BET</span>');
+    if (h.four_bet)    flags.push('<span class="flag-chip chip-4bet">4BET</span>');
+    if (h.five_bet)    flags.push('<span class="flag-chip chip-5bet">5BET+</span>');
+    if (h.allin)       flags.push('<span class="flag-chip chip-allin">AI</span>');
+    if (h.fold)        flags.push('<span class="flag-chip chip-fold">Fold</span>');
+    if (h.squeeze)     flags.push('<span class="flag-chip chip-sqz">Sqz</span>');
+    if (h.position)    flags.push(`<span class="flag-chip chip-pos">${h.position}</span>`);
 
-	return `<div class="history-item">
-	  <div style="flex:1">
-		<div class="history-player">
-		  ${name}
-		  <span style="color:var(--text-dim);font-size:10px;font-family:'IBM Plex Mono',monospace">
-			H${h.hand_number || '?'}
-		  </span>
-		</div>
-		<div class="history-flags">
-		  ${flags.join('') || '<span style="color:var(--text-dim);font-size:10px">fold / no action</span>'}
-		</div>
-	  </div>
-	  <div class="history-time">${timeStr}</div>
-	</div>`;
+    return `<div class="history-item" id="hist-${h.id}">
+      <div style="flex:1;min-width:0">
+        <div class="history-player">
+          ${name}
+          <span style="color:var(--text-dim);font-size:10px;font-family:'IBM Plex Mono',monospace">H${h.hand_number || '?'}</span>
+        </div>
+        <div class="history-flags">
+          ${flags.join('') || '<span style="color:var(--text-dim);font-size:10px">fold / no action</span>'}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <div class="history-time">${timeStr}</div>
+        <button class="edit-btn" onclick="openEditHandModal('${h.id}')">✎</button>
+      </div>
+    </div>`;
   }).join('');
+}
+
+// ============================================================
+// ハンド修正モーダル
+// ============================================================
+
+// 修正可能なフラグ一覧（ラベルとキーの対応）
+const HAND_FLAG_KEYS = [
+  { key: 'limp',        label: 'Limp'    },
+  { key: 'vpip',        label: 'Call'    },
+  { key: 'first_raise', label: 'Open'    },
+  { key: 'three_bet',   label: '3BET'    },
+  { key: 'four_bet',    label: '4BET'    },
+  { key: 'five_bet',    label: '5BET'    },
+  { key: 'allin',       label: 'All-in'  },
+  { key: 'fold',        label: 'Fold'    },
+  { key: 'squeeze',     label: 'Squeeze' },
+];
+
+function openEditHandModal(handId) {
+  const hand = state.hands.find(h => h.id === handId);
+  if (!hand) return;
+
+  document.getElementById('editHandId').value = handId;
+
+  const player = state.players.find(p => p.id === hand.player_id);
+  document.getElementById('editHandTitle').textContent =
+    `${player ? player.name : '不明'} - H${hand.hand_number} (${hand.position})`;
+
+  // フラグチェックボックスを生成
+  const container = document.getElementById('editHandFlags');
+  container.innerHTML = HAND_FLAG_KEYS.map(({ key, label }) => `
+    <label class="edit-flag-label">
+      <input type="checkbox" class="edit-flag-cb" data-key="${key}" ${hand[key] ? 'checked' : ''}>
+      ${label}
+    </label>
+  `).join('');
+
+  document.getElementById('editHandModal').classList.add('open');
+}
+
+async function saveEditHand() {
+  const handId = document.getElementById('editHandId').value;
+  const hand   = state.hands.find(h => h.id === handId);
+  if (!hand) return;
+
+  // チェックボックスの状態を反映
+  document.querySelectorAll('.edit-flag-cb').forEach(cb => {
+    hand[cb.dataset.key] = cb.checked ? 1 : 0;
+  });
+
+  closeModal();
+  renderHistory();
+  renderStats();
+
+  setSyncDot('syncing');
+  try {
+    await apiPost({ type: 'update_hand', hand });
+    setSyncDot('ok');
+  } catch (e) {
+    setSyncDot('error');
+    saveLocal();
+  }
+}
+
+async function deleteHand() {
+  const handId = document.getElementById('editHandId').value;
+  if (!confirm('このハンドを削除しますか？')) return;
+
+  state.hands = state.hands.filter(h => h.id !== handId);
+  closeModal();
+  renderHistory();
+  renderStats();
+
+  setSyncDot('syncing');
+  try {
+    await apiPost({ type: 'delete_hand', id: handId });
+    setSyncDot('ok');
+  } catch (e) {
+    setSyncDot('error');
+    saveLocal();
+  }
 }
 
 // ============================================================
@@ -804,23 +1001,6 @@ function renderHistory() {
 
 function showLoading(show) {
   document.getElementById('loadingOverlay').classList.toggle('hidden', !show);
-}
-
-// ============================================================
-// テーブルクリア処理
-// ============================================================
-function clearAllTable() {
-    state.seats = Array(SEATS).fill(null);
-    state.pendingFlags = {};
-    state.btnSeat = 0;
-    state.handNumber = 1;
-
-    localStorage.removeItem('pt_seats');
-    localStorage.removeItem('pt_btn');
-    localStorage.removeItem('pt_handnum');
-
-    saveTableState();
-    renderTable();
 }
 
 // ============================================================
