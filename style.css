@@ -21,7 +21,7 @@
 }
 
 /* ============================================================
-   ベース 
+   ベース
    ============================================================ */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -67,7 +67,7 @@ header {
 }
 header h1 {
   font-family: 'Bebas Neue', sans-serif;
-  font-size: 18px;
+  font-size: 22px;
   letter-spacing: 3px;
   color: var(--accent);
 }
@@ -161,8 +161,8 @@ header h1 {
   align-items: stretch;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-bottom: 4px;
+  border-radius: 6px;
+  margin-bottom: 6px;
   overflow: hidden;
   transition: border-color 0.2s;
   min-height: 60px;
@@ -229,12 +229,12 @@ header h1 {
 /* プレイヤー名エリア（タップでモーダルを開く） */
 .seat-info {
   flex: 1;
-  padding: 2px 4px 2px 0;
+  padding: 6px 4px 6px 0;
   min-width: 0;
   cursor: pointer;
 }
 .seat-player-name {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -288,7 +288,6 @@ header h1 {
 .flag-toggle.on-4bet  { background: #ffd8c0; color: #902000; }
 .flag-toggle.on-5bet  { background: #ffd0d0; color: #aa0000; }
 .flag-toggle.on-allin { background: #ffc0c0; color: #880000; }
-.flag-toggle.on-fold  { background: #e8e8e8; color: #444444; }
 
 /* 下部固定バー */
 .bottom-bar {
@@ -339,7 +338,6 @@ header h1 {
   border-radius: 5px;
   cursor: pointer;
   white-space: nowrap;
-  min-height: 52px;
 }
 
 /* ============================================================
@@ -479,7 +477,6 @@ select:focus, input:focus { border-color: var(--accent); }
 .chip-4bet  { background: #ffd8c0; color: #902000; }
 .chip-5bet  { background: #ffd0d0; color: #aa0000; }
 .chip-allin { background: #ffc0c0; color: #880000; }
-.chip-fold  { background: #e8e8e8; color: #444444; }
 .chip-pos   { background: var(--surface2); color: var(--text-mid); } /* ポジション表示 */
 
 .history-time {
@@ -599,4 +596,140 @@ select:focus, input:focus { border-color: var(--accent); }
   font-size: 12px;
   cursor: pointer;
   margin-top: 4px;
+}
+
+/* ============================================================
+   追加スタイル
+   ============================================================ */
+
+/* Limp / Fold / Squeeze フラグトグル */
+.flag-toggle.on-limp  { background: #e8f5e8; color: #2a6e2a; }
+.flag-toggle.on-fold  { background: #e8e8e8; color: #444444; }
+
+/* 履歴チップ追加分 */
+.chip-limp { background: #e8f5e8; color: #2a6e2a; }
+.chip-fold { background: #e8e8e8; color: #444444; }
+.chip-sqz  { background: #f0e0ff; color: #6600aa; }
+
+/* 編集ボタン（✎） */
+.edit-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.edit-btn:active { border-color: var(--accent); color: var(--accent); }
+
+/* CLEARボタン */
+.tbl-clear-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--danger);
+  padding: 13px 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* モーダル：保存ボタン */
+.modal-save-btn {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 12px;
+  border-radius: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+/* モーダル：削除ボタン */
+.modal-delete-btn {
+  width: 100%;
+  background: none;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 10px;
+  border-radius: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+/* メモテキストエリア */
+.memo-textarea {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  font-family: 'IBM Plex Sans JP', sans-serif;
+  font-size: 13px;
+  border-radius: 4px;
+  outline: none;
+  resize: vertical;
+  min-height: 72px;
+  margin-bottom: 12px;
+}
+.memo-textarea:focus { border-color: var(--accent); }
+
+/* プレイヤーリストのメモプレビュー */
+.player-memo-preview {
+  font-size: 11px;
+  color: var(--text-mid);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 統計カードのメモ */
+.stats-memo {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--surface2);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-mid);
+  border-left: 3px solid var(--border);
+}
+
+/* ハンド修正モーダルのフラググリッド */
+.edit-flag-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.edit-flag-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+.edit-flag-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
 }
