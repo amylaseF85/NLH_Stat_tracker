@@ -107,18 +107,18 @@ function getHands() {
     player_id:        r[3],
     position:         r[4],
     hand_number:      r[5],
-    vpip:             r[6],   // G列
-    first_raise:      r[7],   // H列
-    three_bet:        r[8],   // I列
-    four_bet:         r[9],   // J列
-    five_bet:         r[10],  // K列
-    allin:            r[11],  // L列
-    three_bet_chance: r[12],  // M列
-    four_bet_chance:  r[13],  // N列
-    squeeze:          r[14],  // O列
-    fold:             r[15],  // P列
-    memo:             r[16],  // Q列
-    limp:             r[17] || 0, // R列（後から追加）
+    vpip:             r[6],  
+    first_raise:      r[7],  
+    three_bet:        r[8],  
+    four_bet:         r[9],  
+    five_bet:         r[10], 
+    allin:            r[11], 
+    three_bet_chance: r[12], 
+    four_bet_chance:  r[13], 
+    squeeze:          r[14], 
+    fold:             r[15], 
+    memo:             r[16], 
+    limp:             r[17] || 0,
   })).filter(h => h.id);
 }
 
@@ -131,18 +131,18 @@ function saveHand(hand) {
     hand.player_id,
     hand.position,
     hand.hand_number,
-    hand.vpip             ? 1 : 0,  // G
-    hand.first_raise      ? 1 : 0,  // H
-    hand.three_bet        ? 1 : 0,  // I
-    hand.four_bet         ? 1 : 0,  // J
-    hand.five_bet         ? 1 : 0,  // K
-    hand.allin            ? 1 : 0,  // L
-    hand.three_bet_chance ? 1 : 0,  // M
-    hand.four_bet_chance  ? 1 : 0,  // N
-    hand.squeeze          ? 1 : 0,  // O
-    hand.fold             ? 1 : 0,  // P
-    hand.memo || '',                 // Q
-    hand.limp             ? 1 : 0,  // R
+    hand.vpip             ? 1 : 0, 
+    hand.first_raise      ? 1 : 0, 
+    hand.three_bet        ? 1 : 0, 
+    hand.four_bet         ? 1 : 0, 
+    hand.five_bet         ? 1 : 0, 
+    hand.allin            ? 1 : 0, 
+    hand.three_bet_chance ? 1 : 0, 
+    hand.four_bet_chance  ? 1 : 0, 
+    hand.squeeze          ? 1 : 0, 
+    hand.fold             ? 1 : 0, 
+    hand.memo || '',                
+    hand.limp             ? 1 : 0, 
   ]);
   return { ok: true };
 }

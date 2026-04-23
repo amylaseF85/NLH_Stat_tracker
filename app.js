@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // Poker Tracker - app.js
 // ============================================================
 
@@ -8,7 +8,7 @@
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwskfryE2q1QL0Z4cRso8PI45I0fp2wr6Dpq4OabIIUZOKjCxRTivRluVcyXlSazvXrAQ/exec';
 
-const SEATS = 9; // テーブルの最大席数
+const SEATS = 9;
 
 // ポジション名テーブル
 // キー = 着席人数、値 = ポジション名配列（index 0 が BTN）
@@ -48,6 +48,8 @@ let state = {
 	// flagKey: 'vpip' | 'raise' | '3bet' | '4bet' | '5bet' | 'allin | 3b_chance | 4b_chance'
 	// NEXT HAND で commitHand() が呼ばれると hands に確定されリセット
   pendingFlags: {},
+
+  straddleSeat: null,
 
 	// 記録済みハンド一覧: [{ id, timestamp, session_id, player_id,
 	//   position, hand_number, vpip, first_raise, three_bet,
@@ -123,9 +125,10 @@ async function init() {
 	// 席配置・BTN位置・ハンド番号を復元
     if (stateRes && stateRes.state) {
       const s = stateRes.state;
-      state.seats      = s.seats      || Array(SEATS).fill(null);
-      state.btnSeat    = s.btnSeat    ?? 0;
-      state.handNumber = s.handNumber || 1;
+      state.seats        = s.seats        || Array(SEATS).fill(null);
+      state.btnSeat      = s.btnSeat      ?? 0;
+      state.handNumber   = s.handNumber   || 1;
+      state.straddleSeat = Number.isInteger(s.straddleSeat) ? s.straddleSeat : null;
     }
 
     setSyncDot('ok');
@@ -155,6 +158,7 @@ function saveLocal() {
   localStorage.setItem('pt_seats',     JSON.stringify(state.seats));
   localStorage.setItem('pt_btn',       JSON.stringify(state.btnSeat));
   localStorage.setItem('pt_handnum',   JSON.stringify(state.handNumber));
+  localStorage.setItem('pt_straddle',  JSON.stringify(state.straddleSeat));
   localStorage.setItem('pt_hands',     JSON.stringify(state.hands));
 }
 
@@ -163,8 +167,10 @@ function loadLocal() {
     state.players    = JSON.parse(localStorage.getItem('pt_players'))  || [];
     state.seats      = JSON.parse(localStorage.getItem('pt_seats'))    || Array(SEATS).fill(null);
     state.btnSeat    = JSON.parse(localStorage.getItem('pt_btn'))      ?? 0;
-    state.handNumber = JSON.parse(localStorage.getItem('pt_handnum'))  || 1;
-    state.hands      = JSON.parse(localStorage.getItem('pt_hands'))    || [];
+    state.handNumber   = JSON.parse(localStorage.getItem('pt_handnum'))   || 1;
+    state.straddleSeat = JSON.parse(localStorage.getItem('pt_straddle'));
+    state.hands        = JSON.parse(localStorage.getItem('pt_hands'))     || [];
+    if (!Number.isInteger(state.straddleSeat)) state.straddleSeat = null;
     if (state.seats.length !== SEATS) state.seats = Array(SEATS).fill(null);
   } catch (e) {}
 }
@@ -175,7 +181,12 @@ async function saveTableState() {
   try {
     await apiPost({
       type: 'save_state',
-      state: { seats: state.seats, btnSeat: state.btnSeat, handNumber: state.handNumber },
+      state: {
+        seats: state.seats,
+        btnSeat: state.btnSeat,
+        handNumber: state.handNumber,
+        straddleSeat: state.straddleSeat,
+      },
     });
     setSyncDot('ok');
   } catch (e) {
@@ -210,9 +221,30 @@ function getActiveSeats() {
   return state.seats.map((p, i) => (p ? i : null)).filter(i => i !== null);
 }
 
-// 各席にポジション名を割り当てたマップを返す
-// 戻り値: { seatIndex: posName, ... }
-// 例: { 0: 'BTN', 1: 'SB', 2: 'BB', 3: 'UTG', ... }
+function getBtnIndex(activeSeats) {
+  let btnIdx = activeSeats.indexOf(state.btnSeat);
+  if (btnIdx !== -1) return btnIdx;
+
+  for (let off = 1; off < SEATS; off++) {
+    const c = (state.btnSeat + off) % SEATS;
+    btnIdx = activeSeats.indexOf(c);
+    if (btnIdx !== -1) return btnIdx;
+  }
+  return 0;
+}
+
+function isStraddleTogglePos(pos) {
+  return pos === 'UTG' || pos === 'BTN' || pos === 'BTN/SB';
+}
+
+function getStraddleSeat(posMap = getPosMap()) {
+  const seat = state.straddleSeat;
+  if (!Number.isInteger(seat)) return null;
+  if (!state.seats[seat]) return null;
+  if (!isStraddleTogglePos(posMap[seat] || '')) return null;
+  return seat;
+}
+
 function getPosMap() {
   const active = getActiveSeats();
   const n = active.length;
@@ -220,22 +252,12 @@ function getPosMap() {
 
   const posNames = POS_MAP[n] || POS_MAP[9];
   const map = {};
-
-	// BTN席がどの着席者インデックスにあるかを特定
-	// state.btnSeat が空席の場合は時計回りで次の着席者を探す
-  let btnIdx = active.indexOf(state.btnSeat);
-  if (btnIdx === -1) {
-    for (let off = 1; off < SEATS; off++) {
-      const c = (state.btnSeat + off) % SEATS;
-      btnIdx = active.indexOf(c);
-      if (btnIdx !== -1) break;
-    }
-  }
+  const btnIdx = getBtnIndex(active);
 
 	// BTN から時計回りにポジションを割り当て
   for (let i = 0; i < n; i++) {
     const seat = active[(btnIdx + i) % n];
-    map[seat] = posNames[i] || '—';
+    map[seat] = posNames[i] || '-';
   }
   return map;
 }
@@ -246,6 +268,7 @@ function getPosMap() {
 
 function renderTable() {
   const posMap = getPosMap();
+  const straddleSeat = getStraddleSeat(posMap);
 
 	// ヘッダーのハンド番号・BTN席番号を更新
   document.getElementById('handNumLabel').innerHTML =
@@ -262,6 +285,7 @@ function renderTable() {
     const isBtn    = pos === 'BTN' || pos === 'BTN/SB';
     const isSb     = pos === 'SB';
     const isBb     = pos === 'BB';
+    const isStr    = straddleSeat === i;
     const flags    = state.pendingFlags[i] || new Set();
 
 		// 席行
@@ -286,17 +310,27 @@ function renderTable() {
       : pos === 'UTG' ? 'utg' : pos === 'UTG+1' ? 'utg1'
       : pos === 'MP'  ? 'mp'  : pos === 'LJ' ? 'lj'
       : pos === 'HJ'  ? 'hj'  : pos === 'CO' ? 'co' : '';
-    const posDiv = document.createElement('div');
-    posDiv.className = `pos-badge ${posKey}`;
-    posDiv.textContent = pos || '—';
 
-		// プレイヤー名（タップでモーダルを開く）
+    const posDiv = document.createElement('div');
+    posDiv.className = `pos-badge ${isStr ? 'str' : posKey}`;
+    posDiv.textContent = isStr ? 'STR' : (pos || '-');
+
+    const canToggleStr = !!player && isStraddleTogglePos(pos);
+    if (canToggleStr) {
+      posDiv.classList.add('pos-toggle');
+      posDiv.onclick = e => {
+        e.stopPropagation();
+        toggleStraddle(i);
+      };
+    }
+
+    // プレイヤー名（タップでモーダルを開く）
     const infoDiv = document.createElement('div');
     infoDiv.className = 'seat-info';
     infoDiv.onclick = () => openAssignModal(i);
     infoDiv.innerHTML = player
       ? `<div class="seat-player-name">${player.name}</div>`
-      : `<div class="seat-empty-label">空席 — タップして割当</div>`;
+      : `<div class="seat-empty-label">空席 - タップして割当</div>`;
 
     topDiv.appendChild(numDiv);
     topDiv.appendChild(posDiv);
@@ -313,8 +347,8 @@ function renderTable() {
         // limp: BB額だけコール（レイズなし）。VPIP=1・PFR=0 のケース
         //       Callとの違い: Callは3BET等への対応コール、limpはプリフロップ初回のコール
         { key: 'limp',  label: 'Limp'   },
-        { key: 'vpip',  label: 'Call'   }, // 3BET/4BETへのコール等
-        { key: 'raise', label: 'Open'   }, // オープンレイズ（RFI）
+        { key: 'vpip',  label: 'Call'   },
+        { key: 'raise', label: 'Open'   },
         { key: '3bet',  label: '3BET'   },
         { key: '4bet',  label: '4BET'   },
         { key: '5bet',  label: '5BET'   },
@@ -349,6 +383,15 @@ function toggleFlag(seatIdx, flag) {
   renderTable();
 }
 
+function toggleStraddle(seatIdx) {
+  const posMap = getPosMap();
+  const pos = posMap[seatIdx] || '';
+  if (!state.seats[seatIdx] || !isStraddleTogglePos(pos)) return;
+
+  state.straddleSeat = (state.straddleSeat === seatIdx) ? null : seatIdx;
+  saveTableState();
+  renderTable();
+}
 // ============================================================
 // ハンド確定（NEXT HAND）
 // ============================================================
@@ -370,34 +413,47 @@ function toggleFlag(seatIdx, flag) {
 //   3BETを行った場合が Squeeze
 //
 // ============================================================
-
 async function commitHand() {
-  const posMap   = getPosMap();
-  const btn      = document.getElementById('nextHandBtn');
-  btn.disabled   = true;
+  const posMap = getPosMap();
+  const btn = document.getElementById('nextHandBtn');
+  btn.disabled = true;
 
   const activeSeats = getActiveSeats();
   const n = activeSeats.length;
   if (n < 2) { btn.disabled = false; return; }
 
-  // プリフロップのアクション順: UTG(index 3) から始まり BTN → SB → BB で終わる
-  // POS_MAP の index に基づいてソート: 3,4,5,...,n-1,0,1,2
-  const btnIdx = activeSeats.indexOf(state.btnSeat);
-  const actionOrder = [];
-  // UTG以降（BTNより後ろのポジション）→ BTN → SB → BB の順
-  for (let i = 3; i < n; i++) actionOrder.push(activeSeats[(btnIdx + i) % n]);  // UTG〜CO
-  actionOrder.push(activeSeats[(btnIdx + 0) % n]); // BTN
-  actionOrder.push(activeSeats[(btnIdx + 1) % n]); // SB
-  actionOrder.push(activeSeats[(btnIdx + 2) % n]); // BB
+  const btnIdx = getBtnIndex(activeSeats);
+  const actionOffsets = [];
 
-  // ── アクション状態の追跡 ──
-  let openFound      = false; // オープンレイズが出たか
-  let callAfterOpen  = false; // オープン後にコール（limp除く）が出たか → squeeze判定に使用
-  let threeBetFound  = false; // 3BETが出たか
+  if (n === 2) {
+    actionOffsets.push(0, 1);
+  } else if (n === 3) {
+    actionOffsets.push(0, 1, 2);
+  } else {
+    for (let i = 3; i < n; i++) actionOffsets.push(i);
+    actionOffsets.push(0, 1, 2);
+  }
 
-  const chanceMap = {}; // { seat: { three, four } }
+  const straddleSeat = getStraddleSeat(posMap);
+  const straddlePos = straddleSeat !== null ? (posMap[straddleSeat] || '') : '';
 
-  // 1パス目: アクション順に機会フラグを計算
+  if (straddlePos === 'UTG' && n >= 4) {
+    actionOffsets.length = 0;
+    for (let i = 4; i < n; i++) actionOffsets.push(i);
+    actionOffsets.push(0, 1, 2, 3);
+  } else if (straddlePos === 'BTN' || straddlePos === 'BTN/SB') {
+    actionOffsets.length = 0;
+    for (let i = 1; i < n; i++) actionOffsets.push(i);
+    actionOffsets.push(0);
+  }
+
+  const actionOrder = actionOffsets.map(off => activeSeats[(btnIdx + off) % n]);
+
+  let openFound     = false;
+  let callAfterOpen = false;
+  let threeBetFound = false;
+  const chanceMap = {};
+
   actionOrder.forEach(seat => {
     const flags = state.pendingFlags[seat] || new Set();
 
@@ -410,10 +466,9 @@ async function commitHand() {
     };
 
     const isRaise = flags.has('raise') || flags.has('3bet') || flags.has('4bet') || flags.has('5bet');
-    if (flags.has('raise'))  openFound = true;
-    // オープン後にコール（limpではなくcallとして記録されたもの）があればsqueeze判定に使う
+    if (flags.has('raise')) openFound = true;
     if (openFound && flags.has('vpip') && !isRaise) callAfterOpen = true;
-    if (flags.has('3bet'))   threeBetFound = true;
+    if (flags.has('3bet')) threeBetFound = true;
   });
 
   // 2パス目: ハンドレコードを生成
@@ -423,8 +478,8 @@ async function commitHand() {
     const playerId = state.seats[seat];
     if (!playerId) return;
 
-    const flags   = state.pendingFlags[seat] || new Set();
-    const acted   = flags.size > 0;
+    const flags = state.pendingFlags[seat] || new Set();
+    const acted = flags.size > 0;
     const isRaise = flags.has('raise') || flags.has('3bet') || flags.has('4bet') || flags.has('5bet');
 
     // VPIP: limp / call / raise系 / allin のいずれかがあればポットに参加
@@ -436,13 +491,14 @@ async function commitHand() {
 
     // squeeze: 3BETであり、かつオープン後にCallが出ていた状況
     const squeeze = (flags.has('3bet') && openFound && callAfterOpen) ? 1 : 0;
+    const isStr = straddleSeat === seat;
 
     newHands.push({
       id:               `h_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       timestamp:        new Date().toISOString(),
       session_id:       state.sessionId,
       player_id:        playerId,
-      position:         posMap[seat] || '',
+      position:         isStr ? 'STR' : (posMap[seat] || ''),
       hand_number:      state.handNumber,
       vpip,
       limp:             flags.has('limp')  ? 1 : 0,
@@ -485,6 +541,7 @@ async function commitHand() {
 
 // BTN を時計回りに次の着席者へ自動移動
 function advanceBtn() {
+  state.straddleSeat = null;
   const active = getActiveSeats();
   if (active.length < 2) return;
   for (let off = 1; off <= SEATS; off++) {
@@ -509,9 +566,11 @@ function clearAllTable() {
   state.pendingFlags = {};
   state.btnSeat      = 0;
   state.handNumber   = 1;
+  state.straddleSeat = null;
   localStorage.removeItem('pt_seats');
   localStorage.removeItem('pt_btn');
   localStorage.removeItem('pt_handnum');
+  localStorage.removeItem('pt_straddle');
   saveTableState();
   renderTable();
 }
@@ -552,6 +611,7 @@ function assignSeat(seatIdx, playerId) {
     if (prev >= 0 && prev !== seatIdx) state.seats[prev] = null;
   }
   state.seats[seatIdx] = playerId;
+  if (!state.seats[state.straddleSeat]) state.straddleSeat = null;
   saveTableState();
   closeModal();
   renderTable();
@@ -616,6 +676,7 @@ async function deletePlayer(id) {
   if (!confirm('削除しますか？')) return;
   state.players = state.players.filter(p => p.id !== id);
   state.seats   = state.seats.map(s => s === id ? null : s);
+  if (!state.seats[state.straddleSeat]) state.straddleSeat = null;
   refreshPlayerSelects();
   renderPlayerList();
   renderTable();
@@ -759,34 +820,23 @@ function calcStats(hands) {
 
   const pct = (v, d) => d ? Math.round(v / d * 100) : 0;
 
-  // ── 基本カウント ──
-  const limpCount      = hands.filter(h => h.limp).length;
-  const vpipCount      = hands.filter(h => h.vpip || h.limp || h.first_raise || h.allin).length; // VPIP = 参加したすべて
-  const pfrCount       = hands.filter(h => h.first_raise).length;
-  const threeCount     = hands.filter(h => h.three_bet).length;
-  const sqzCount       = hands.filter(h => h.squeeze).length;
-  const foldCount      = hands.filter(h => h.fold).length;
-  const allinCount     = hands.filter(h => h.allin).length;
+  const vpipCount  = hands.filter(h => h.vpip || h.limp || h.first_raise || h.allin).length;
+  const pfrCount   = hands.filter(h => h.first_raise).length;
+  const threeCount = hands.filter(h => h.three_bet).length;
+  const foldCount  = hands.filter(h => h.fold).length;
 
-  // ── 機会ベースの分母 ──
+    // ── 機会ベースの分母 ──
 	// three_bet_chance: オープンがあり自分が3BETできる状況だったハンド数
-  const threeChance    = hands.filter(h => h.three_bet_chance).length;
-	// four_bet_chance: 3BETがあり自分が4BETできる状況だったハンド数
-  const fourChance     = hands.filter(h => h.four_bet_chance).length;
-
-  // ── ATS (Attempt To Steal) ──
-	// SB/BTN/CO からのオープンレイズ率
-	// 分子: SB/BTN/CO ポジションでのオープン数
-	// 分母: SB/BTN/CO ポジションでの記録ハンド数
-  const stealPos       = ['BTN', 'CO', 'SB', 'BTN/SB'];
-  const atsHands       = hands.filter(h => stealPos.includes(h.position));
-  const atsOpen        = atsHands.filter(h => h.first_raise).length;
-
-  // ── F3B (Fold to 3-Bet) ──
+  const threeChance = hands.filter(h => h.three_bet_chance).length;
+    // ── F3B (Fold to 3-Bet) ──
   // 分母: four_bet_chance（3BETを受けた場面 = 4BET機会）
   // 分子: その中でfoldしたもの
-  const f3bHands       = hands.filter(h => h.four_bet_chance);
-  const f3bFold        = f3bHands.filter(h => h.fold).length;
+  const f3bHands    = hands.filter(h => h.four_bet_chance);
+  const f3bFold     = f3bHands.filter(h => h.fold).length;
+
+  const aggrCount = hands.filter(h => h.first_raise || h.three_bet || h.four_bet || h.five_bet || h.allin).length;
+  const callCount = hands.filter(h => h.vpip && !h.first_raise && !h.limp && !h.allin).length;
+  const afValue = callCount ? (aggrCount / callCount) : aggrCount;
 
 	// ── STYLE 判定 ──
 	// VPIP と PFR の値からプレイスタイルを大まかに分類
@@ -807,13 +857,10 @@ function calcStats(hands) {
     hands: n,
     vpip:  pct(vpipCount, n),
     pfr:   pct(pfrCount, n),
-    limp:  pct(limpCount, n),
-    three: pct(threeCount, threeChance), // 機会ベース
-    sqz:   pct(sqzCount, threeChance),   // 機会ベース（3BET機会のうちsqueeze）
-    ats:   pct(atsOpen, atsHands.length),
-    f3b:   pct(f3bFold, f3bHands.length), // 機会ベース
+    three: pct(threeCount, threeChance),
+    f3b:   pct(f3bFold, f3bHands.length),
     fold:  pct(foldCount, n),
-    ai:    pct(allinCount, n),
+    af:    Math.round(afValue * 100) / 100,
     style,
   };
 }
@@ -838,19 +885,15 @@ function statsCard(player, hands) {
     <div class="stats-grid">
       <div class="stat-item"><span class="stat-value">${s.vpip}</span><span class="stat-label">VPIP</span></div>
       <div class="stat-item"><span class="stat-value orange">${s.pfr}</span><span class="stat-label">PFR</span></div>
-      <div class="stat-item"><span class="stat-value">${s.limp}</span><span class="stat-label">Limp%</span></div>
       <div class="stat-item"><span class="stat-value orange">${s.three}</span><span class="stat-label">3bet%</span></div>
-      <div class="stat-item"><span class="stat-value red">${s.sqz}</span><span class="stat-label">Squeeze%</span></div>
-      <div class="stat-item"><span class="stat-value orange">${s.ats}</span><span class="stat-label">ATS</span></div>
       <div class="stat-item"><span class="stat-value red">${s.f3b}</span><span class="stat-label">F3B</span></div>
       <div class="stat-item"><span class="stat-value">${s.fold}</span><span class="stat-label">Fold%</span></div>
-      <div class="stat-item"><span class="stat-value red">${s.ai}</span><span class="stat-label">AI%</span></div>
+      <div class="stat-item"><span class="stat-value red">${s.af.toFixed(2)}</span><span class="stat-label">AF</span></div>
     </div>
     <div style="margin-top:8px;font-size:12px;opacity:.7;font-family:'IBM Plex Mono',monospace">STYLE: ${s.style}</div>
     ${player.memo ? `<div class="stats-memo">${player.memo}</div>` : ''}
   </div>`;
 }
-
 function renderStats() {
   const c = document.getElementById('statsContainer');
   const filter = document.getElementById('statsPlayer').value;
@@ -907,7 +950,7 @@ function renderHistory() {
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         <div class="history-time">${timeStr}</div>
-        <button class="edit-btn" onclick="openEditHandModal('${h.id}')">✎</button>
+        <button class="edit-btn" onclick="openEditHandModal('${h.id}')">笨・/button>
       </div>
     </div>`;
   }).join('');
@@ -1008,3 +1051,5 @@ function showLoading(show) {
 // ============================================================
 
 init();
+
+

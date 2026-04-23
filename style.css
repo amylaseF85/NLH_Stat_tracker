@@ -1,12 +1,6 @@
-/* ============================================================
-   Poker Tracker - スタイルシート
-   ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+JP:wght@300;400;500&display=swap');
 
-/* ============================================================
-   CSS変数 - カラーパレット
-   ============================================================ */
 :root {
   --bg:       #f4f4f6; /* ページ背景 */
   --surface:  #ffffff; /* カード・ヘッダー背景 */
@@ -20,10 +14,6 @@
   --text-mid: #555570; /* 中間テキスト */
 }
 
-/* ============================================================
-   ベース
-   ============================================================ */
-* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   background: var(--bg);
@@ -225,8 +215,19 @@ header h1 {
 .pos-badge.lj   { background: #e4f4d0; color: #4a7020; }
 .pos-badge.hj   { background: #fff0c0; color: #806000; }
 .pos-badge.co   { background: #ffe4b0; color: #905000; }
+.pos-badge.str  { background: #5c3d99; color: #fff; }
 
-/* プレイヤー名エリア（タップでモーダルを開く） */
+.pos-badge.pos-toggle {
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+.pos-badge.pos-toggle:active {
+  transform: translateY(1px);
+}
+.pos-badge.pos-toggle:hover {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12) inset;
+}
+
 .seat-info {
   flex: 1;
   padding: 6px 4px 6px 0;
@@ -733,3 +734,4 @@ select:focus, input:focus { border-color: var(--accent); }
   cursor: pointer;
   accent-color: var(--accent);
 }
+
